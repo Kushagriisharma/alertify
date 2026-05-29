@@ -47,13 +47,28 @@ const state = {
   placesMap: null,   // Map instance for nearby safe places
   placesMarker: null,// Marker for nearby safe places user position
   placeMarkers: [],  // Array tracking nearby place markers
-  currentPlaceType: "hospital" // Current places filter type
+  currentPlaceType: "hospital", // Current places filter type
+  deviceId: null      // Unique device identifier for database isolation
 };
+
+// Helper to fetch or generate a unique device ID
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem("alertify_device_id");
+  if (!id) {
+    // Generate a robust unique ID: dev_ + random token + timestamp
+    const randomPart = Math.random().toString(36).substring(2, 10);
+    id = `dev_${randomPart}_${Date.now()}`;
+    localStorage.setItem("alertify_device_id", id);
+  }
+  state.deviceId = id;
+  return id;
+}
 
 // ==========================================
 // INITIALIZATION ON DOCUMENT LOAD
 // ==========================================
 document.addEventListener("DOMContentLoaded", () => {
+  getOrCreateDeviceId(); // Load or generate private device identifier
   initAppNavigation();
   initStorageEngine();
   startLiveGPSWatch();
@@ -145,8 +160,8 @@ function refreshMapsLayout() {
 // ==========================================
 function initStorageEngine() {
   if (!isFirebasePlaceholder && db) {
-    // 1. Sync Contacts from Firebase
-    const contactsRef = ref(db, "contacts");
+    // 1. Sync Contacts from Firebase under private device ID namespace
+    const contactsRef = ref(db, `devices/${state.deviceId}/contacts`);
     onValue(contactsRef, (snapshot) => {
       const data = snapshot.val();
       state.contacts = [];
@@ -159,8 +174,8 @@ function initStorageEngine() {
       updateDashboardStats();
     });
 
-    // 2. Sync History logs from Firebase
-    const historyRef = ref(db, "history");
+    // 2. Sync History logs from Firebase under private device ID namespace
+    const historyRef = ref(db, `devices/${state.deviceId}/history`);
     onValue(historyRef, (snapshot) => {
       const data = snapshot.val();
       state.history = [];
@@ -185,7 +200,7 @@ function initStorageEngine() {
 // --- Contact Storage Triggers ---
 function saveContactToStorage(contact) {
   if (!isFirebasePlaceholder && db) {
-    const contactsRef = ref(db, "contacts");
+    const contactsRef = ref(db, `devices/${state.deviceId}/contacts`);
     const newContactRef = push(contactsRef);
     set(newContactRef, contact)
       .then(() => console.log("Contact pushed to Firebase."))
@@ -201,7 +216,7 @@ function saveContactToStorage(contact) {
 
 function deleteContactFromStorage(contactId) {
   if (!isFirebasePlaceholder && db) {
-    const contactRef = ref(db, `contacts/${contactId}`);
+    const contactRef = ref(db, `devices/${state.deviceId}/contacts/${contactId}`);
     remove(contactRef)
       .then(() => console.log("Contact deleted from Firebase."))
       .catch(err => console.error("Firebase delete error:", err));
@@ -221,7 +236,7 @@ function loadLocalContacts() {
 // --- History Storage Triggers ---
 function logAlertToStorage(alertObj) {
   if (!isFirebasePlaceholder && db) {
-    const historyRef = ref(db, "history");
+    const historyRef = ref(db, `devices/${state.deviceId}/history`);
     const newHistoryRef = push(historyRef);
     set(newHistoryRef, alertObj)
       .then(() => console.log("SOS Alert log saved to Firebase."))
@@ -237,7 +252,7 @@ function logAlertToStorage(alertObj) {
 
 function clearHistoryFromStorage() {
   if (!isFirebasePlaceholder && db) {
-    const historyRef = ref(db, "history");
+    const historyRef = ref(db, `devices/${state.deviceId}/history`);
     set(historyRef, null)
       .then(() => console.log("Firebase alert history cleared."))
       .catch(err => console.error("Firebase clear error:", err));
@@ -675,19 +690,24 @@ function triggerSosEmergency() {
   // Play continuous siren sound loop
   startSirenSoundLoop();
 
-  // Automatically trigger SMS client dialer for the primary emergency contact (first in directory)
+  // Automatically trigger SMS client dialer for ALL emergency contacts simultaneously
   if (state.contacts.length > 0) {
-    const primaryContact = state.contacts[0];
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    // Extract phone numbers and join with OS-appropriate separator
+    const separator = isIOS ? ';' : ',';
+    const allPhones = state.contacts.map(c => c.phone).join(separator);
+    
     const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
     const escapedMsg = encodeURIComponent(emergencyMessage);
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    
+    // Format link: iOS needs ';' and '&', Android needs ',' and '?'
     const smsLink = isIOS 
-      ? `sms:${primaryContact.phone};&body=${escapedMsg}` 
-      : `sms:${primaryContact.phone}?body=${escapedMsg}`;
+      ? `sms:${allPhones};&body=${escapedMsg}` 
+      : `sms:${allPhones}?body=${escapedMsg}`;
     
     // Trigger redirect to native messaging app
     setTimeout(() => {
-      console.log(`Auto-launching SMS dialer for primary contact: ${primaryContact.name}`);
+      console.log(`Auto-launching multi-contact SMS dialer for: ${allPhones}`);
       window.location.href = smsLink;
     }, 600);
   }
