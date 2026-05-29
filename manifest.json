@@ -1,0 +1,18 @@
+{
+  "short_name": "Alertify",
+  "name": "Alertify - SOS Emergency Application",
+  "description": "An emergency SOS web client designed for instant incident signaling and location sharing.",
+  "icons": [
+    {
+      "src": "assets/logo.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "index.html",
+  "background_color": "#0a0d14",
+  "theme_color": "#ef4444",
+  "display": "standalone",
+  "orientation": "portrait"
+}

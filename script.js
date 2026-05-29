@@ -59,6 +59,15 @@ document.addEventListener("DOMContentLoaded", () => {
   startLiveGPSWatch();
   initMapManager();
   setupEventListeners();
+
+  // Register PWA Service Worker for offline availability
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(reg => console.log('✅ Service Worker registered successfully with scope:', reg.scope))
+        .catch(err => console.error('❌ Service Worker registration failed:', err));
+    });
+  }
 });
 
 // ==========================================
@@ -665,6 +674,23 @@ function triggerSosEmergency() {
 
   // Play continuous siren sound loop
   startSirenSoundLoop();
+
+  // Automatically trigger SMS client dialer for the primary emergency contact (first in directory)
+  if (state.contacts.length > 0) {
+    const primaryContact = state.contacts[0];
+    const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
+    const escapedMsg = encodeURIComponent(emergencyMessage);
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const smsLink = isIOS 
+      ? `sms:${primaryContact.phone};&body=${escapedMsg}` 
+      : `sms:${primaryContact.phone}?body=${escapedMsg}`;
+    
+    // Trigger redirect to native messaging app
+    setTimeout(() => {
+      console.log(`Auto-launching SMS dialer for primary contact: ${primaryContact.name}`);
+      window.location.href = smsLink;
+    }, 600);
+  }
 }
 
 function stopSosEmergency() {
