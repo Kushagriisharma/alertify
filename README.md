@@ -55,7 +55,7 @@ To run this application locally, you do not need complex build tools or compiler
 ### 1. Clone the Codebase
 Clone this repository to your local system:
 ```bash
-git clone https://github.com/YOUR_USERNAME/alertify.git
+git clone https://github.com/Kushagriisharma/alertify.git
 cd alertify
 ```
 
@@ -131,10 +131,9 @@ git init
 git add .
 git commit -m "Initial commit - Alertify SOS Emergency App"
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/alertify.git
+git remote add origin https://github.com/Kushagriisharma/alertify.git
 git push -u origin main
 ```
-*(Make sure to replace `YOUR_USERNAME` with your actual GitHub username).*
 
 ### 2. Enable GitHub Pages Hosting
 1. Navigate to your repository page on [GitHub](https://github.com).
@@ -144,7 +143,7 @@ git push -u origin main
 5. Set the Source dropdown menu to **"Deploy from a branch"**.
 6. Set the Branch dropdown menu to **`main`** and the directory path selector to **`/ (root)`**.
 7. Click the **Save** button.
-8. Wait 1-2 minutes. Refresh the page to see the generated live URL under the top banner (e.g. `https://yourusername.github.io/alertify/`).
+8. Your generated live URL is: **`https://kushagriisharma.github.io/alertify/`**
 
 ---
 
