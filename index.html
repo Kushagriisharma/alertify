@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Alertify is an SOS emergency application that helps you share your live location and alert trusted contacts in times of crisis.">
+  <title>Alertify - SOS Emergency Application</title>
+  
+  <!-- Google Fonts: Outfit for headings, Inter for body -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- FontAwesome for Premium Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  
+  <!-- CSS Stylesheet -->
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- App Shell Layout -->
+  <div class="app-container">
+    
+    <!-- Top Header Bar -->
+    <header class="app-header">
+      <div class="header-logo">
+        <img src="assets/logo.png" alt="Alertify Logo" class="logo-img">
+        <span class="logo-text">Alertify</span>
+      </div>
+      <div class="system-status" id="systemStatus">
+        <span class="status-dot green"></span>
+        <span class="status-text">System Active</span>
+      </div>
+    </header>
+
+    <!-- Sidebar Navigation for Desktop / Bottom Nav for Mobile -->
+    <nav class="app-navbar">
+      <ul class="nav-links">
+        <li class="nav-item active" data-target="dashboard-section">
+          <i class="fa-solid fa-house"></i>
+          <span>Dashboard</span>
+        </li>
+        <li class="nav-item" data-target="map-section">
+          <i class="fa-solid fa-map-location-dot"></i>
+          <span>Live Map</span>
+        </li>
+        <li class="nav-item" data-target="contacts-section">
+          <i class="fa-solid fa-user-shield"></i>
+          <span>Contacts</span>
+        </li>
+        <li class="nav-item" data-target="places-section">
+          <i class="fa-solid fa-shield-halved"></i>
+          <span>Safe Places</span>
+        </li>
+        <li class="nav-item" data-target="history-section">
+          <i class="fa-solid fa-clock-rotate-left"></i>
+          <span>History</span>
+        </li>
+        <li class="nav-item" data-target="about-section">
+          <i class="fa-solid fa-circle-info"></i>
+          <span>About</span>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="app-main-content">
+      
+      <!-- Unconfigured Firebase Warning Banner -->
+      <div id="localModeBanner" class="warning-banner hidden">
+        <div class="banner-content">
+          <i class="fa-solid fa-triangle-exclamation"></i>
+          <span><strong>Running in Local Mode:</strong> Firebase configuration is not set up. Data will be saved locally.</span>
+        </div>
+        <button id="closeBannerBtn" class="close-banner-btn">&times;</button>
+      </div>
+
+      <!-- 1. DASHBOARD SECTION -->
+      <section id="dashboard-section" class="app-section active">
+        <div class="section-container dashboard-grid">
+          
+          <div class="welcome-card card glass-card">
+            <h1>Emergency Assistance</h1>
+            <p>In case of emergency, press and hold the SOS button below. This will locate you and notify your saved contacts instantly.</p>
+          </div>
+
+          <div class="sos-action-card card glass-card text-center">
+            <div class="sos-button-wrapper">
+              <div class="pulse-ring ring-1"></div>
+              <div class="pulse-ring ring-2"></div>
+              <button id="sosBtn" class="sos-button">
+                <span class="sos-text">SOS</span>
+                <span class="sos-subtext">Tap to Trigger</span>
+              </button>
+            </div>
+            <div class="sos-status-indicator">
+              <span id="quickStatus">GPS Ready</span>
+            </div>
+          </div>
+
+          <div class="status-summary-card card glass-card">
+            <h3>Quick Status</h3>
+            <div class="status-info-row">
+              <div class="status-info-col">
+                <span class="info-label">Current Lat/Lng</span>
+                <span class="info-value" id="dashCoords">Fetching location...</span>
+              </div>
+              <div class="status-info-col">
+                <span class="info-label">Active Contacts</span>
+                <span class="info-value" id="dashContactsCount">0 Contacts</span>
+              </div>
+            </div>
+            <div class="status-info-row">
+              <div class="status-info-col">
+                <span class="info-label">Last Alert Triggered</span>
+                <span class="info-value" id="dashLastAlert">No alerts yet</span>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- 2. LIVE MAP SECTION -->
+      <section id="map-section" class="app-section">
+        <div class="section-container full-height-container">
+          <div class="map-controls-card card glass-card">
+            <div class="map-header">
+              <h2><i class="fa-solid fa-location-crosshairs text-red"></i> Current GPS Location</h2>
+              <button id="refreshLocationBtn" class="btn btn-secondary">
+                <i class="fa-solid fa-arrows-rotate"></i> Update GPS
+              </button>
+            </div>
+            <div class="gps-data-strip">
+              <div class="gps-metric">
+                <span class="metric-label">Latitude</span>
+                <span class="metric-value" id="mapLat">--</span>
+              </div>
+              <div class="gps-metric">
+                <span class="metric-label">Longitude</span>
+                <span class="metric-value" id="mapLng">--</span>
+              </div>
+              <div class="gps-metric">
+                <span class="metric-label">Accuracy</span>
+                <span class="metric-value" id="mapAccuracy">--</span>
+              </div>
+            </div>
+            <p class="address-display"><i class="fa-solid fa-map-pin text-red"></i> <span id="addressText">Resolving address...</span></p>
+          </div>
+          
+          <div class="map-wrapper card">
+            <div id="googleMap" class="map-container">
+              <div class="map-placeholder">
+                <i class="fa-solid fa-map-location fa-3x text-muted"></i>
+                <p>Loading Google Map...</p>
+                <small class="text-muted">Requires dynamic API key initialization</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. EMERGENCY CONTACTS SECTION -->
+      <section id="contacts-section" class="app-section">
+        <div class="section-container">
+          <div class="contacts-grid">
+            
+            <!-- Contact Creation Form -->
+            <div class="card glass-card">
+              <h2><i class="fa-solid fa-user-plus text-red"></i> Add Emergency Contact</h2>
+              <form id="contactForm" class="styled-form">
+                <div class="form-group">
+                  <label for="contactName">Full Name</label>
+                  <input type="text" id="contactName" required placeholder="e.g. Jane Doe">
+                </div>
+                <div class="form-group">
+                  <label for="contactPhone">Phone Number</label>
+                  <input type="tel" id="contactPhone" required placeholder="e.g. +1 555-0199">
+                </div>
+                <div class="form-group">
+                  <label for="contactRelation">Relationship</label>
+                  <select id="contactRelation" required>
+                    <option value="" disabled selected>Select relationship</option>
+                    <option value="Parent">Parent</option>
+                    <option value="Spouse">Spouse / Partner</option>
+                    <option value="Sibling">Sibling</option>
+                    <option value="Relative">Relative</option>
+                    <option value="Friend">Friend</option>
+                    <option value="Neighbor">Neighbor</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">
+                  <i class="fa-solid fa-save"></i> Save Contact
+                </button>
+              </form>
+            </div>
+
+            <!-- Contacts List Panel -->
+            <div class="card glass-card">
+              <h2><i class="fa-solid fa-users text-red"></i> Trusted Contacts</h2>
+              <p class="section-desc">These contacts will be notified with your location link when you press the SOS button.</p>
+              
+              <div id="contactsContainer" class="contacts-list">
+                <!-- Dynamic Contacts Loaded Here -->
+                <div class="no-data">
+                  <i class="fa-solid fa-user-shield fa-2x text-muted"></i>
+                  <p>No contacts saved yet.</p>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </section>
+
+      <!-- 4. NEARBY SAFE PLACES SECTION -->
+      <section id="places-section" class="app-section">
+        <div class="section-container full-height-container">
+          <div class="places-control-card card glass-card">
+            <h2><i class="fa-solid fa-hospital-user text-red"></i> Find Nearby Safe Havens</h2>
+            <p class="section-desc">Quickly find safety assistance resources near your current coordinate position.</p>
+            
+            <div class="places-filter-tabs">
+              <button class="filter-tab active" data-type="hospital">
+                <i class="fa-solid fa-circle-h"></i> Hospitals
+              </button>
+              <button class="filter-tab" data-type="police">
+                <i class="fa-solid fa-building-shield"></i> Police Stations
+              </button>
+              <button class="filter-tab" data-type="pharmacy">
+                <i class="fa-solid fa-prescription-bottle-medical"></i> Pharmacies
+              </button>
+            </div>
+          </div>
+
+          <div class="places-content-grid">
+            <!-- Left Panel: Places List -->
+            <div class="places-list-container card glass-card">
+              <div id="placesList" class="places-scroller">
+                <!-- Dynamically populated safe places cards -->
+                <div class="no-data">
+                  <i class="fa-solid fa-map-pin fa-2x text-muted"></i>
+                  <p>Select a category to view nearby locations.</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Right Panel: Micro-Map -->
+            <div class="places-map-wrapper card">
+              <div id="placesMap" class="map-container">
+                <div class="map-placeholder">
+                  <i class="fa-solid fa-map-location-dot fa-3x text-muted"></i>
+                  <p>Nearby places map loading...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 5. LOCATION HISTORY SECTION -->
+      <section id="history-section" class="app-section">
+        <div class="section-container">
+          <div class="card glass-card">
+            <div class="history-header">
+              <h2><i class="fa-solid fa-clock-rotate-left text-red"></i> SOS Alert & Location History</h2>
+              <button id="clearHistoryBtn" class="btn btn-danger-outline">
+                <i class="fa-solid fa-trash-can"></i> Clear Log
+              </button>
+            </div>
+            <p class="section-desc">Review your historic emergency events. These logs are useful to track past coordinates or provide reference data.</p>
+            
+            <div id="historyTableContainer" class="history-container">
+              <!-- Dynamically populated list or table -->
+              <div class="no-data">
+                <i class="fa-solid fa-folder-open fa-2x text-muted"></i>
+                <p>No history entries found.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 6. ABOUT SECTION -->
+      <section id="about-section" class="app-section">
+        <div class="section-container max-w-700">
+          <div class="card glass-card">
+            <div class="text-center">
+              <img src="assets/logo.png" alt="Alertify Logo" class="about-logo">
+              <h2>Alertify</h2>
+              <p class="app-version">Version 1.0.0</p>
+            </div>
+            <hr class="divider">
+            <h3>About Alertify</h3>
+            <p>Alertify is a high-availability Emergency SOS responsive web client designed for instant incident signaling. Utilizing the browser Geolocation API and Google Maps API, it computes your exact geographic details, saves active incidents, and bridges communication with trusted emergency contacts.</p>
+            
+            <h3>Emergency Procedures</h3>
+            <ul class="emergency-tips">
+              <li><strong>Find Safety:</strong> Try to move to a safe, visible, and well-lit area.</li>
+              <li><strong>Trigger SOS:</strong> Press and hold the primary SOS button. Let the countdown finish.</li>
+              <li><strong>Contact Authorities:</strong> Use speed dial buttons to summon medical or safety services.</li>
+            </ul>
+
+            <h3>National Emergency Hotline Speed Dial</h3>
+            <div class="hotline-grid">
+              <a href="tel:112" class="hotline-btn">
+                <span class="hotline-icon"><i class="fa-solid fa-phone"></i></span>
+                <span class="hotline-name">National Emergency</span>
+                <span class="hotline-num">112</span>
+              </a>
+              <a href="tel:102" class="hotline-btn">
+                <span class="hotline-icon"><i class="fa-solid fa-truck-medical"></i></span>
+                <span class="hotline-name">Ambulance</span>
+                <span class="hotline-num">102</span>
+              </a>
+              <a href="tel:100" class="hotline-btn">
+                <span class="hotline-icon"><i class="fa-solid fa-handcuffs"></i></span>
+                <span class="hotline-name">Police Control</span>
+                <span class="hotline-num">100</span>
+              </a>
+              <a href="tel:101" class="hotline-btn">
+                <span class="hotline-icon"><i class="fa-solid fa-fire-extinguisher"></i></span>
+                <span class="hotline-name">Fire Department</span>
+                <span class="hotline-num">101</span>
+              </a>
+            </div>
+
+            <hr class="divider">
+            <div class="about-footer text-center">
+              <p>Designed and Built by <strong>Kushagri Sharma</strong></p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- SOS COUNTDOWN OVERLAY MODAL -->
+  <div id="countdownModal" class="modal-overlay hidden">
+    <div class="countdown-modal-content text-center">
+      <div class="modal-alert-icon pulse-red">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+      </div>
+      <h2>TRIGGERING EMERGENCY SOS</h2>
+      <p>Notifying trusted contacts and logging location details in...</p>
+      <div id="countdownTimer" class="countdown-number">3</div>
+      <button id="cancelSosBtn" class="btn btn-secondary btn-large">
+        <i class="fa-solid fa-ban"></i> CANCEL ALERT
+      </button>
+    </div>
+  </div>
+
+  <!-- ACTIVE EMERGENCY ALARM OVERLAY -->
+  <div id="activeAlarmOverlay" class="alarm-overlay hidden">
+    <div class="alarm-content-container text-center">
+      <div class="siren-beacon"></div>
+      
+      <h1 class="alarm-title flashing-text">EMERGENCY SOS ACTIVE</h1>
+      
+      <div class="gps-live-display card glass-card max-w-500">
+        <h3>My Live Location Coords</h3>
+        <p class="coords-line"><i class="fa-solid fa-crosshairs"></i> Lat: <span id="alarmLat">--</span> | Lng: <span id="alarmLng">--</span></p>
+        <p class="address-line"><i class="fa-solid fa-map-pin"></i> <span id="alarmAddress">Retrieving location name...</span></p>
+        <a id="alarmMapsLink" href="#" target="_blank" class="btn btn-light-outline btn-block">
+          <i class="fa-solid fa-map-location-dot"></i> View on Google Maps
+        </a>
+      </div>
+
+      <div class="notified-contacts-box max-w-500 card glass-card">
+        <h3>Contact Options</h3>
+        <p class="sms-desc">Send alert message templates or call your saved emergency contacts immediately:</p>
+        <div id="alarmContactsList" class="alarm-contacts-grid">
+          <!-- Populated dynamically with call/text triggers for each contact -->
+          <div class="text-muted">No emergency contacts saved yet.</div>
+        </div>
+      </div>
+
+      <div class="alarm-actions max-w-500">
+        <button id="stopAlarmBtn" class="btn btn-light btn-block btn-large">
+          <i class="fa-solid fa-circle-check"></i> I AM SAFE NOW - STOP ALARM
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Maps JavaScript API (Loads asynchronously) -->
+  <!-- NOTE: "YOUR_GOOGLE_MAPS_API_KEY" is a placeholder which the user will replace. -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places" async defer></script>
+
+  <!-- Core JavaScript Module -->
+  <script type="module" src="script.js"></script>
+</body>
+</html>

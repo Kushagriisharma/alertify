@@ -1,0 +1,67 @@
+/**
+ * Firebase Realtime Database Configuration & Initialization
+ * 
+ * Alertify SOS Emergency Application
+ * 
+ * Replace the placeholder values in `firebaseConfig` with your actual 
+ * Firebase project keys from the Firebase Console (https://console.firebase.google.com).
+ */
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+import { 
+  getDatabase, 
+  ref, 
+  set, 
+  push, 
+  onValue, 
+  remove, 
+  child, 
+  get,
+  off
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+
+// Firebase Configuration Object - PASTE YOUR CONFIG HERE
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  databaseURL: "YOUR_DATABASE_URL",
+  projectId: "YOUR_PROJECT_ID",
+  storageBucket: "YOUR_PROJECT.appspot.com",
+  messagingSenderId: "YOUR_SENDER_ID",
+  appId: "YOUR_APP_ID"
+};
+
+// Check if Firebase setup is still configured with the default placeholders
+const isFirebasePlaceholder = 
+  firebaseConfig.apiKey === "YOUR_API_KEY" || 
+  firebaseConfig.databaseURL.includes("YOUR_DATABASE_URL") ||
+  firebaseConfig.projectId === "YOUR_PROJECT_ID";
+
+let db = null;
+let app = null;
+
+if (!isFirebasePlaceholder) {
+  try {
+    app = initializeApp(firebaseConfig);
+    db = getDatabase(app);
+    console.log("🔥 Firebase initialized successfully. Sync mode: cloud database.");
+  } catch (error) {
+    console.error("❌ Firebase initialization failed:", error);
+  }
+} else {
+  console.warn("⚠️ Alertify running in LOCAL mode. Fallback storage (LocalStorage) will be used for contacts and logs.");
+}
+
+// Export the database instance, utility methods, and placeholder status
+export { 
+  db, 
+  isFirebasePlaceholder, 
+  ref, 
+  set, 
+  push, 
+  onValue, 
+  remove, 
+  child, 
+  get,
+  off 
+};
