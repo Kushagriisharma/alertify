@@ -65,3 +65,17 @@ export {
   get,
   off 
 };
+
+// Twilio Cloud API Configuration - Replace with your credentials for automated calls
+const twilioConfig = {
+  accountSid: "YOUR_TWILIO_ACCOUNT_SID",
+  authToken: "YOUR_TWILIO_AUTH_TOKEN",
+  twilioNumber: "YOUR_TWILIO_PHONE_NUMBER"
+};
+
+const isTwilioConfigured = 
+  twilioConfig.accountSid !== "YOUR_TWILIO_ACCOUNT_SID" && 
+  twilioConfig.authToken !== "YOUR_TWILIO_AUTH_TOKEN" && 
+  twilioConfig.twilioNumber !== "YOUR_TWILIO_PHONE_NUMBER";
+
+export { twilioConfig, isTwilioConfigured };

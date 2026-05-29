@@ -25,7 +25,9 @@ import {
   remove, 
   child, 
   get,
-  off 
+  off,
+  twilioConfig,
+  isTwilioConfigured
 } from "./firebase.js";
 
 // ==========================================
@@ -296,6 +298,11 @@ function startLiveGPSWatch() {
       
       // Realtime map centers updating
       updateMapPositions();
+
+      // Stream coordinates to cloud/local if SOS alarm is active (live tracking)
+      if (state.isAlarmActive) {
+        updateActiveSosCoordinates();
+      }
     },
     (error) => {
       console.error("GPS tracking error:", error);
@@ -311,6 +318,82 @@ function startLiveGPSWatch() {
     },
     geoOptions
   );
+}
+
+// Stream current coordinates to cloud/local tracking node
+function updateActiveSosCoordinates() {
+  const trackingObj = {
+    latitude: state.currentCoords.lat,
+    longitude: state.currentCoords.lng,
+    accuracy: state.gpsAccuracy,
+    address: state.resolvedAddress,
+    lastUpdated: Date.now()
+  };
+
+  if (!isFirebasePlaceholder && db) {
+    const sosRef = ref(db, `devices/${state.deviceId}/active_sos`);
+    set(sosRef, trackingObj)
+      .catch(err => console.error("Error streaming active coordinates:", err));
+  } else {
+    localStorage.setItem("alertify_active_sos", JSON.stringify(trackingObj));
+  }
+}
+
+// Twilio Cloud SMS & Voice Call automated API requests
+function triggerTwilioAlerts(mapsLink) {
+  if (!isTwilioConfigured) {
+    console.warn("Twilio is not configured. Skipping automated call and SMS alerts.");
+    return;
+  }
+
+  const { accountSid, authToken, twilioNumber } = twilioConfig;
+  
+  // Encode Basic Authentication header
+  const authHeader = "Basic " + btoa(`${accountSid}:${authToken}`);
+  
+  state.contacts.forEach(contact => {
+    console.log(`📡 Sending Twilio background alert for: ${contact.name}`);
+    
+    // 1. Send automatic background SMS
+    const smsBody = `ALERTIFY: EMERGENCY! Kushagri Sharma is in danger. Location address: ${state.resolvedAddress}. Track live coordinates here: ${mapsLink}`;
+    
+    const smsParams = new URLSearchParams();
+    smsParams.append("To", contact.phone);
+    smsParams.append("From", twilioNumber);
+    smsParams.append("Body", smsBody);
+
+    fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+      method: "POST",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: smsParams
+    })
+    .then(res => res.json())
+    .then(data => console.log(`Twilio SMS sent to ${contact.name}:`, data.sid || data.message))
+    .catch(err => console.error(`Failed to send Twilio SMS to ${contact.name}:`, err));
+
+    // 2. Place automatic voice call playing the automated speech
+    const twimlCode = `<Response><Say voice="alice">Emergency! Kushagri Sharma has triggered an SOS alert and is in danger. Their location has been geocoded at ${state.resolvedAddress}. Please inspect your text messages immediately for their live Google Maps location tracking link. I repeat, check your messages to locate them. Goodbye.</Say></Response>`;
+    
+    const callParams = new URLSearchParams();
+    callParams.append("To", contact.phone);
+    callParams.append("From", twilioNumber);
+    callParams.append("Twiml", twimlCode);
+
+    fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`, {
+      method: "POST",
+      headers: {
+        "Authorization": authHeader,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: callParams
+    })
+    .then(res => res.json())
+    .then(data => console.log(`Twilio Call placed to ${contact.name}:`, data.sid || data.message))
+    .catch(err => console.error(`Failed to place Twilio Call to ${contact.name}:`, err));
+  });
 }
 
 function updateGpsIndicators(statusStr) {
@@ -690,31 +773,45 @@ function triggerSosEmergency() {
   // Play continuous siren sound loop
   startSirenSoundLoop();
 
-  // Automatically trigger SMS client dialer for ALL emergency contacts simultaneously
-  if (state.contacts.length > 0) {
-    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    // Extract phone numbers and join with OS-appropriate separator
-    const separator = isIOS ? ';' : ',';
-    const allPhones = state.contacts.map(c => c.phone).join(separator);
-    
-    const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
-    const escapedMsg = encodeURIComponent(emergencyMessage);
-    
-    // Format link: iOS needs ';' and '&', Android needs ',' and '?'
-    const smsLink = isIOS 
-      ? `sms:${allPhones};&body=${escapedMsg}` 
-      : `sms:${allPhones}?body=${escapedMsg}`;
-    
-    // Trigger redirect to native messaging app
-    setTimeout(() => {
-      console.log(`Auto-launching multi-contact SMS dialer for: ${allPhones}`);
-      window.location.href = smsLink;
-    }, 600);
+  // Stream initial coordinate values
+  updateActiveSosCoordinates();
+
+  // Dispatch alerts based on network state and Twilio configurations
+  const isOnline = navigator.onLine;
+  if (isOnline && isTwilioConfigured) {
+    // Cloud Mode: Background automatic calls and texts
+    triggerTwilioAlerts(mapsLink);
+  } else {
+    // Offline/Fallback Mode: Launch OS-specific native SMS dialer
+    if (state.contacts.length > 0) {
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+      const separator = isIOS ? ';' : ',';
+      const allPhones = state.contacts.map(c => c.phone).join(separator);
+      
+      const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
+      const escapedMsg = encodeURIComponent(emergencyMessage);
+      const smsLink = isIOS 
+        ? `sms:${allPhones};&body=${escapedMsg}` 
+        : `sms:${allPhones}?body=${escapedMsg}`;
+      
+      setTimeout(() => {
+        console.log(`Auto-launching multi-contact SMS dialer for: ${allPhones}`);
+        window.location.href = smsLink;
+      }, 600);
+    }
   }
 }
 
 function stopSosEmergency() {
   state.isAlarmActive = false;
+  
+  // Clear active tracking node
+  if (!isFirebasePlaceholder && db) {
+    const sosRef = ref(db, `devices/${state.deviceId}/active_sos`);
+    set(sosRef, null);
+  } else {
+    localStorage.removeItem("alertify_active_sos");
+  }
   
   // Reset header status
   updateGpsIndicators("Active");
