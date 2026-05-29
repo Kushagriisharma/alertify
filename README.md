@@ -26,6 +26,7 @@ Developed as a modern, resume-ready frontend showcase, the project boasts premiu
 * **Logic & APIs:** JavaScript ES6 (ES Modules, Dynamic Imports, Web Audio API, Geolocation API)
 * **Database & Cloud Synchronization:** Firebase Realtime Database (SDK v10 CDN integration)
 * **Map Services:** Google Maps JS SDK (Geocoding & Places Library) + Leaflet.js (OpenStreetMap engine fallback)
+* **PWA offline support:** Service Worker caching strategies & Web App manifest configurations
 
 ---
 
@@ -36,8 +37,10 @@ alertify/
 │
 ├── index.html          # Core HTML layout & UI views
 ├── style.css           # Styling system & animations
-├── script.js           # Geolocation, mapping, & business logic
+├── script.js           # Geolocation, mapping, PWA register, & business logic
 ├── firebase.js         # Firebase initialization & modular exports
+├── manifest.json       # PWA Application descriptor
+├── sw.js               # Service Worker offline asset cacher
 ├── README.md           # Developer documentation & guide
 └── assets/
     └── logo.png        # High-definition emergency-themed logo
@@ -145,12 +148,26 @@ git push -u origin main
 
 ---
 
+## 📶 Offline PWA Capabilities & Auto-SMS Redirection
+
+Alertify is designed to be highly reliable during worst-case emergency scenarios, including **no network / no data coverage zones**. 
+
+### 1. Offline Mode Execution
+- **Cache Storage:** A background Service Worker (`sw.js`) pre-caches index.html, style.css, script.js, logos, and CDNs (Leaflet map files, font engines). Once opened on a device once, the application will load instantly without any network connection.
+- **Local Fallback Engine:** If offline, the application seamlessly bypasses the Cloud database and stores contacts and coordinates directly in your browser's persistent `LocalStorage`.
+- **GPS Satellite Triangulation:** Browsers compute Geolocation using the device's physical GPS hardware sensors. This does not require active mobile data, meaning your coordinates will update even in remote wilderness areas.
+
+### 2. Auto-SMS Protocol Redirection
+- **Sandbox Limitation:** Modern browsers prevent websites from programmatically sending SMS messages silently without user interaction for security reasons.
+- **Auto-Launcher:** To bypass this and speed up emergency signaling, when the SOS countdown reaches zero, Alertify immediately compiles an emergency message containing your live coordinates and redirects the window to open your device's native SMS application (`sms:`) pre-filled for your primary trusted contact. You only need to tap the Send button in your native messaging app.
+
+---
+
 ## 🔮 Future Enhancements
 
 * **SMS Gateway Integration:** Connect Twilio APIs or Nexmo SMS nodes to dispatch alerts over standard mobile networks directly from the database server.
 * **Geofencing & Safe Zones:** Alert trusted contacts automatically if the user drifts outside pre-set geofenced coordinate shapes.
 * **Dynamic Audio Siren Toggles:** Allow users to choose from multiple audible alarm frequencies.
-* **Progressive Web App (PWA):** Register service workers to cache layouts, allowing Alertify to load and run fully offline.
 
 ---
 
