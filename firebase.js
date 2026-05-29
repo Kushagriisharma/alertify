@@ -22,13 +22,13 @@ import {
 
 // Firebase Configuration Object - PASTE YOUR CONFIG HERE
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  databaseURL: "YOUR_DATABASE_URL",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID"
+  apiKey: "AIzaSyDxYdboHTYT674i0GdElIm2_IgoAF5JzZY",
+  authDomain: "alertify-eee05.firebaseapp.com",
+  databaseURL: "https://alertify-eee05-default-rtdb.firebaseio.com",
+  projectId: "alertify-eee05",
+  storageBucket: "alertify-eee05.firebasestorage.app",
+  messagingSenderId: "75136802725",
+  appId: "1:75136802725:web:42957a01a36bc1d024d24c"
 };
 
 // Check if Firebase setup is still configured with the default placeholders
