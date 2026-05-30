@@ -1041,6 +1041,14 @@ function renderContacts() {
   state.contacts.forEach(contact => {
     const card = document.createElement("div");
     card.className = "contact-item-card";
+
+    // Show verify button only if Twilio is configured
+    const verifyBtnHtml = isTwilioConfigured 
+      ? `<button class="btn-verify-contact" data-id="${contact.id}" title="Verify in Twilio" style="color: #3b82f6; margin-right: 0.5rem; background: rgba(59, 130, 246, 0.1); border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s ease;">
+          <i class="fa-solid fa-phone-volume"></i>
+         </button>`
+      : "";
+
     card.innerHTML = `
       <div class="contact-details">
         <div class="contact-name-row">
@@ -1049,12 +1057,27 @@ function renderContacts() {
         </div>
         <span class="contact-phone"><i class="fa-solid fa-phone-flip text-muted"></i> ${escapeHTML(contact.phone)}</span>
       </div>
-      <div class="contact-actions">
+      <div class="contact-actions" style="display: flex; align-items: center;">
+        ${verifyBtnHtml}
         <button class="btn-delete-contact" data-id="${contact.id}" title="Remove Contact">
           <i class="fa-solid fa-trash"></i>
         </button>
       </div>`;
     
+    // Wire up verify event listener if it exists
+    const verifyBtn = card.querySelector(".btn-verify-contact");
+    if (verifyBtn) {
+      verifyBtn.addEventListener("click", () => {
+        verifyNumberInTwilio(contact);
+      });
+      verifyBtn.addEventListener("mouseenter", () => {
+        verifyBtn.style.background = "rgba(59, 130, 246, 0.25)";
+      });
+      verifyBtn.addEventListener("mouseleave", () => {
+        verifyBtn.style.background = "rgba(59, 130, 246, 0.1)";
+      });
+    }
+
     // Wire up delete event listener
     card.querySelector(".btn-delete-contact").addEventListener("click", (e) => {
       const contactId = e.currentTarget.getAttribute("data-id");
