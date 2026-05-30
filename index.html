@@ -393,6 +393,22 @@
     </div>
   </div>
 
+  <!-- TWILIO PHONE VERIFICATION MODAL -->
+  <div id="twilioVerificationModal" class="modal-overlay hidden">
+    <div class="countdown-modal-content text-center">
+      <div class="modal-alert-icon" style="background: rgba(59, 130, 246, 0.15); color: #3b82f6; width: 75px; height: 75px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-size: 2.2rem;">
+        <i class="fa-solid fa-phone-volume"></i>
+      </div>
+      <h2>TWILIO VERIFICATION REQUIRED</h2>
+      <p style="font-size: 0.95rem;">Twilio is placing a call to <strong id="verificationContactName">--</strong> (<span id="verificationContactPhone">--</span>).</p>
+      <p class="text-muted" style="font-size: 0.85rem;">Answer the call on their phone and type this verification code when prompted:</p>
+      <div id="verificationCode" class="countdown-number" style="color: #3b82f6; font-size: 4rem; text-shadow: 0 0 15px rgba(59, 130, 246, 0.35);">------</div>
+      <button id="closeVerificationBtn" class="btn btn-secondary btn-block">
+        <i class="fa-solid fa-circle-check"></i> CLOSE WINDOW
+      </button>
+    </div>
+  </div>
+
   <!-- Google Maps JavaScript API (Loads asynchronously) -->
   <!-- NOTE: "YOUR_GOOGLE_MAPS_API_KEY" is a placeholder which the user will replace. -->
   <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places" async defer></script>

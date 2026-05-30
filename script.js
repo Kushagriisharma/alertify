@@ -412,6 +412,59 @@ function triggerTwilioAlerts(mapsLink) {
   });
 }
 
+// Programmatically verify contact caller ID in Twilio REST API on the fly
+function verifyNumberInTwilio(contact) {
+  if (!navigator.onLine) {
+    console.warn("Device is offline. Skipping Twilio caller ID verification.");
+    return;
+  }
+  if (!isTwilioConfigured) {
+    console.warn("Twilio is not configured. Skipping Twilio caller ID verification.");
+    return;
+  }
+
+  const { accountSid, authToken } = twilioConfig;
+  const authHeader = "Basic " + btoa(`${accountSid}:${authToken}`);
+
+  console.log(`📡 Requesting Twilio caller ID verification for: ${contact.name} (${contact.phone})`);
+
+  const params = new URLSearchParams();
+  params.append("PhoneNumber", contact.phone);
+  params.append("FriendlyName", contact.name);
+
+  fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/OutgoingCallerIds.json`, {
+    method: "POST",
+    headers: {
+      "Authorization": authHeader,
+      "Content-Type": "application/x-www-form-urlencoded"
+    },
+    body: params
+  })
+  .then(res => {
+    if (!res.ok) {
+      return res.json().then(errData => {
+        throw new Error(errData.message || `HTTP error ${res.status}`);
+      });
+    }
+    return res.json();
+  })
+  .then(data => {
+    console.log("Twilio OutgoingCallerIds validation request success:", data);
+    if (data.validation_code) {
+      document.getElementById("verificationContactName").innerText = contact.name;
+      document.getElementById("verificationContactPhone").innerText = contact.phone;
+      document.getElementById("verificationCode").innerText = data.validation_code;
+      document.getElementById("twilioVerificationModal").classList.remove("hidden");
+    } else {
+      console.warn("No validation code returned in Twilio response.", data);
+    }
+  })
+  .catch(err => {
+    console.error("Twilio caller ID verification failed:", err);
+    alert(`Twilio caller ID verification failed: ${err.message}`);
+  });
+}
+
 function updateGpsIndicators(statusStr) {
   const dashCoords = document.getElementById("dashCoords");
   const quickStatus = document.getElementById("quickStatus");
@@ -1353,6 +1406,7 @@ function setupEventListeners() {
       };
 
       saveContactToStorage(newContact);
+      verifyNumberInTwilio(newContact);
       
       // Reset Form UI
       contactForm.reset();
@@ -1399,6 +1453,14 @@ function setupEventListeners() {
       if (confirm("Are you sure you want to clear your entire SOS activity history log?")) {
         clearHistoryFromStorage();
       }
+    });
+  }
+
+  // Close Twilio Verification Modal
+  const closeVerificationBtn = document.getElementById("closeVerificationBtn");
+  if (closeVerificationBtn) {
+    closeVerificationBtn.addEventListener("click", () => {
+      document.getElementById("twilioVerificationModal").classList.add("hidden");
     });
   }
 }
