@@ -900,24 +900,15 @@ function triggerSosEmergency() {
   if (isOnline && isTwilioConfigured) {
     // Cloud Mode: Background automatic calls and texts
     triggerTwilioAlerts(mapsLink);
-  } else {
-    // Offline/Fallback Mode: Launch OS-specific native SMS dialer
-    if (state.contacts.length > 0) {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      const separator = isIOS ? ';' : ',';
-      const allPhones = state.contacts.map(c => c.phone).join(separator);
-      
-      const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
-      const escapedMsg = encodeURIComponent(emergencyMessage);
-      const smsLink = isIOS 
-        ? `sms:${allPhones};&body=${escapedMsg}` 
-        : `sms:${allPhones}?body=${escapedMsg}`;
-      
-      setTimeout(() => {
-        console.log(`Auto-launching multi-contact SMS dialer for: ${allPhones}`);
-        window.location.href = smsLink;
-      }, 600);
-    }
+  }
+
+  // Trigger direct native phone call to the primary contact
+  if (state.contacts.length > 0) {
+    const primaryPhone = state.contacts[0].phone;
+    setTimeout(() => {
+      console.log(`📞 Redirecting to direct call for primary contact: ${primaryPhone}`);
+      window.location.href = `tel:${primaryPhone}`;
+    }, 600);
   }
 }
 
