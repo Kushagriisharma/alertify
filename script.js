@@ -171,6 +171,10 @@ function initStorageEngine() {
         Object.keys(data).forEach(key => {
           state.contacts.push({ id: key, ...data[key] });
         });
+      } else {
+        // Automatically seed the user's contact number on first load
+        const defaultContact = { name: "Primary Support", phone: "9079945728", relationship: "Relative" };
+        saveContactToStorage(defaultContact);
       }
       renderContacts();
       updateDashboardStats();
@@ -194,6 +198,10 @@ function initStorageEngine() {
   } else {
     // LocalStorage fallback routines
     loadLocalContacts();
+    if (state.contacts.length === 0) {
+      const defaultContact = { name: "Primary Support", phone: "9079945728", relationship: "Relative" };
+      saveContactToStorage(defaultContact);
+    }
     loadLocalHistory();
     updateDashboardStats();
   }
