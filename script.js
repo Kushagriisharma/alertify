@@ -77,12 +77,62 @@ document.addEventListener("DOMContentLoaded", () => {
   initMapManager();
   setupEventListeners();
 
-  // Register PWA Service Worker for offline availability
+  // Register PWA Service Worker for offline availability and update notifications
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('./sw.js')
-        .then(reg => console.log('✅ Service Worker registered successfully with scope:', reg.scope))
+        .then(reg => {
+          console.log('✅ Service Worker registered successfully with scope:', reg.scope);
+
+          const updateBanner = document.getElementById("appUpdateBanner");
+          const updateBtn = document.getElementById("updateAppBtn");
+          const dismissBtn = document.getElementById("dismissUpdateBtn");
+
+          if (!updateBanner || !updateBtn || !dismissBtn) return;
+
+          function showUpdateBanner(worker) {
+            updateBanner.classList.remove("hidden");
+            
+            // On update click, send message to skip waiting
+            updateBtn.onclick = () => {
+              worker.postMessage({ type: 'SKIP_WAITING' });
+              updateBanner.classList.add("hidden");
+            };
+
+            dismissBtn.onclick = () => {
+              updateBanner.classList.add("hidden");
+            };
+          }
+
+          // Check if there is already a service worker waiting to activate
+          if (reg.waiting) {
+            showUpdateBanner(reg.waiting);
+          }
+
+          // Listen for new service worker installation
+          reg.addEventListener('updatefound', () => {
+            const newWorker = reg.installing;
+            newWorker.addEventListener('statechange', () => {
+              if (newWorker.state === 'installed') {
+                if (navigator.serviceWorker.controller) {
+                  // New content is available and can be activated
+                  showUpdateBanner(newWorker);
+                }
+              }
+            });
+          });
+        })
         .catch(err => console.error('❌ Service Worker registration failed:', err));
+
+      // Page reload listener on controller change (service worker take-over)
+      let refreshing = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (!refreshing) {
+          refreshing = true;
+          console.log('🔄 New Service Worker active, reloading page...');
+          window.location.reload();
+        }
+      });
     });
   }
 });

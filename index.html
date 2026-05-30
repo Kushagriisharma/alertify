@@ -409,6 +409,23 @@
     </div>
   </div>
 
+  <!-- PWA UPDATE NOTIFICATION BANNER -->
+  <div id="appUpdateBanner" class="update-banner hidden">
+    <div class="update-banner-content">
+      <div class="update-banner-header">
+        <i class="fa-solid fa-cloud-arrow-down update-banner-icon"></i>
+        <div class="update-banner-text">
+          <strong>Alertify Update Available</strong>
+          <span>A new version of Alertify is ready. Update now to load the latest improvements.</span>
+        </div>
+      </div>
+      <div class="update-banner-actions">
+        <button id="updateAppBtn" class="btn btn-primary btn-sm">Update Now</button>
+        <button id="dismissUpdateBtn" class="btn btn-secondary btn-sm">Dismiss</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Google Maps JavaScript API (Loads asynchronously) -->
   <!-- NOTE: "YOUR_GOOGLE_MAPS_API_KEY" is a placeholder which the user will replace. -->
   <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_GOOGLE_MAPS_API_KEY&libraries=places" async defer></script>

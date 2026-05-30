@@ -3,7 +3,7 @@
  * Enables complete offline access in no-network environments.
  */
 
-const CACHE_NAME = 'alertify-cache-v5';
+const CACHE_NAME = 'alertify-cache-v6';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -79,4 +79,12 @@ self.addEventListener('fetch', event => {
       });
     })
   );
+});
+
+// 4. Message event: force activation when client requests skip waiting
+self.addEventListener('message', event => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('⚡ Service Worker: skipWaiting requested. Activating new worker...');
+    self.skipWaiting();
+  }
 });
