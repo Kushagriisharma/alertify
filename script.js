@@ -50,7 +50,8 @@ const state = {
   placesMarker: null,// Marker for nearby safe places user position
   placeMarkers: [],  // Array tracking nearby place markers
   currentPlaceType: "hospital", // Current places filter type
-  deviceId: null      // Unique device identifier for database isolation
+  deviceId: null,      // Unique device identifier for database isolation
+  editingContactId: null // ID of contact currently being edited
 };
 
 // Helper to fetch or generate a unique device ID
@@ -211,6 +212,8 @@ function refreshMapsLayout() {
 // 2. STORAGE ENGINE (FIREBASE OR LOCALSTORAGE)
 // ==========================================
 function initStorageEngine() {
+  const isSeeded = localStorage.getItem("alertify_contacts_seeded");
+
   if (!isFirebasePlaceholder && db) {
     // 1. Sync Contacts from Firebase under private device ID namespace
     const contactsRef = ref(db, `devices/${state.deviceId}/contacts`);
@@ -221,7 +224,7 @@ function initStorageEngine() {
         Object.keys(data).forEach(key => {
           state.contacts.push({ id: key, ...data[key] });
         });
-      } else {
+      } else if (!isSeeded) {
         // Automatically seed the user's contact numbers on first load
         const defaultContacts = [
           { name: "Support Contact 1", phone: "9079945728", relationship: "Relative" },
@@ -229,6 +232,7 @@ function initStorageEngine() {
           { name: "Support Contact 3", phone: "6376189404", relationship: "Friend" }
         ];
         defaultContacts.forEach(c => saveContactToStorage(c));
+        localStorage.setItem("alertify_contacts_seeded", "true");
       }
       renderContacts();
       updateDashboardStats();
@@ -252,13 +256,14 @@ function initStorageEngine() {
   } else {
     // LocalStorage fallback routines
     loadLocalContacts();
-    if (state.contacts.length === 0) {
+    if (state.contacts.length === 0 && !isSeeded) {
       const defaultContacts = [
         { name: "Support Contact 1", phone: "9079945728", relationship: "Relative" },
         { name: "Support Contact 2", phone: "9079397361", relationship: "Relative" },
         { name: "Support Contact 3", phone: "6376189404", relationship: "Friend" }
       ];
       defaultContacts.forEach(c => saveContactToStorage(c));
+      localStorage.setItem("alertify_contacts_seeded", "true");
     }
     loadLocalHistory();
     updateDashboardStats();
@@ -279,6 +284,23 @@ function saveContactToStorage(contact) {
     localContacts.push(contact);
     localStorage.setItem("alertify_contacts", JSON.stringify(localContacts));
     loadLocalContacts();
+  }
+}
+
+function updateContactInStorage(contactId, updatedContact) {
+  if (!isFirebasePlaceholder && db) {
+    const contactRef = ref(db, `devices/${state.deviceId}/contacts/${contactId}`);
+    set(contactRef, updatedContact)
+      .then(() => console.log("Contact updated in Firebase."))
+      .catch(err => console.error("Firebase update error:", err));
+  } else {
+    const localContacts = JSON.parse(localStorage.getItem("alertify_contacts")) || [];
+    const index = localContacts.findIndex(c => c.id === contactId);
+    if (index !== -1) {
+      localContacts[index] = { ...localContacts[index], ...updatedContact };
+      localStorage.setItem("alertify_contacts", JSON.stringify(localContacts));
+      loadLocalContacts();
+    }
   }
 }
 
@@ -1083,6 +1105,9 @@ function renderContacts() {
       </div>
       <div class="contact-actions" style="display: flex; align-items: center;">
         ${verifyBtnHtml}
+        <button class="btn-edit-contact" data-id="${contact.id}" title="Edit Contact" style="color: #f59e0b; margin-right: 0.5rem; background: rgba(245, 158, 11, 0.1); border-radius: 8px; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; transition: background 0.2s ease;">
+          <i class="fa-solid fa-pen"></i>
+        </button>
         <button class="btn-delete-contact" data-id="${contact.id}" title="Remove Contact">
           <i class="fa-solid fa-trash"></i>
         </button>
@@ -1099,6 +1124,33 @@ function renderContacts() {
       });
       verifyBtn.addEventListener("mouseleave", () => {
         verifyBtn.style.background = "rgba(59, 130, 246, 0.1)";
+      });
+    }
+
+    // Wire up edit event listener
+    const editBtn = card.querySelector(".btn-edit-contact");
+    if (editBtn) {
+      editBtn.addEventListener("click", () => {
+        document.getElementById("contactName").value = contact.name;
+        document.getElementById("contactPhone").value = contact.phone;
+        document.getElementById("contactRelation").value = contact.relationship;
+        state.editingContactId = contact.id;
+
+        // Scroll to form smoothly
+        document.getElementById("contactForm").scrollIntoView({ behavior: 'smooth' });
+
+        // Update button text to indicate edit mode
+        const contactForm = document.getElementById("contactForm");
+        const submitBtn = contactForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.innerHTML = `<i class="fa-solid fa-pen-to-square"></i> Update Contact`;
+        }
+      });
+      editBtn.addEventListener("mouseenter", () => {
+        editBtn.style.background = "rgba(245, 158, 11, 0.25)";
+      });
+      editBtn.addEventListener("mouseleave", () => {
+        editBtn.style.background = "rgba(245, 158, 11, 0.1)";
       });
     }
 
@@ -1490,24 +1542,37 @@ function setupEventListeners() {
     });
   }
 
-  // Save Contact Form Submission
+  // Save/Update Contact Form Submission
   const contactForm = document.getElementById("contactForm");
   if (contactForm) {
     contactForm.addEventListener("submit", (e) => {
       e.preventDefault();
       
-      const newContact = {
+      const contactData = {
         name: document.getElementById("contactName").value.trim(),
         phone: document.getElementById("contactPhone").value.trim(),
         relationship: document.getElementById("contactRelation").value
       };
 
-      saveContactToStorage(newContact);
-      verifyNumberInTwilio(newContact);
+      if (state.editingContactId) {
+        // Update existing contact
+        updateContactInStorage(state.editingContactId, contactData);
+        state.editingContactId = null;
+        
+        // Reset submit button text
+        const submitBtn = contactForm.querySelector('button[type="submit"]');
+        if (submitBtn) {
+          submitBtn.innerHTML = `<i class="fa-solid fa-save"></i> Save Contact`;
+        }
+      } else {
+        // Save new contact
+        saveContactToStorage(contactData);
+        verifyNumberInTwilio(contactData);
+      }
       
       // Reset Form UI
       contactForm.reset();
-      console.log("Contact successfully added.");
+      console.log("Contact successfully processed.");
     });
   }
 
