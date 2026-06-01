@@ -3,7 +3,7 @@
  * Enables complete offline access in no-network environments.
  */
 
-const CACHE_NAME = 'alertify-cache-v11';
+const CACHE_NAME = 'alertify-cache-v12';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

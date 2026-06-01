@@ -405,6 +405,21 @@ function updateActiveSosCoordinates() {
   }
 }
 
+// Helper to automatically format local phone numbers to international E.164 format for Twilio
+function formatPhoneNumberForTwilio(phone) {
+  let cleaned = phone.replace(/[^\d+]/g, "");
+  if (cleaned.startsWith("+")) {
+    return cleaned;
+  }
+  if (cleaned.startsWith("91") && cleaned.length === 12) {
+    return "+" + cleaned;
+  }
+  if (cleaned.length === 10) {
+    return "+91" + cleaned;
+  }
+  return cleaned;
+}
+
 // Twilio Cloud SMS & Voice Call automated API requests
 function triggerTwilioAlerts(mapsLink) {
   if (!isTwilioConfigured) {
@@ -418,13 +433,14 @@ function triggerTwilioAlerts(mapsLink) {
   const authHeader = "Basic " + btoa(`${accountSid}:${authToken}`);
   
   state.contacts.forEach(contact => {
-    console.log(`📡 Sending Twilio background alert for: ${contact.name}`);
+    const formattedPhone = formatPhoneNumberForTwilio(contact.phone);
+    console.log(`📡 Sending Twilio background alert for: ${contact.name} (To: ${formattedPhone})`);
     
     // 1. Send automatic background SMS
     const smsBody = `ALERTIFY: EMERGENCY! Kushagri Sharma is in danger. Location address: ${state.resolvedAddress}. Track live coordinates here: ${mapsLink}`;
     
     const smsParams = new URLSearchParams();
-    smsParams.append("To", contact.phone);
+    smsParams.append("To", formattedPhone);
     smsParams.append("From", twilioNumber);
     smsParams.append("Body", smsBody);
 
@@ -444,7 +460,7 @@ function triggerTwilioAlerts(mapsLink) {
     const twimlCode = `<Response><Say voice="alice">Emergency! Kushagri Sharma has triggered an SOS alert and is in danger. Their location has been geocoded at ${state.resolvedAddress}. Please inspect your text messages immediately for their live Google Maps location tracking link. I repeat, check your messages to locate them. Goodbye.</Say></Response>`;
     
     const callParams = new URLSearchParams();
-    callParams.append("To", contact.phone);
+    callParams.append("To", formattedPhone);
     callParams.append("From", twilioNumber);
     callParams.append("Twiml", twimlCode);
 
@@ -476,10 +492,11 @@ function verifyNumberInTwilio(contact) {
   const { accountSid, authToken } = twilioConfig;
   const authHeader = "Basic " + btoa(`${accountSid}:${authToken}`);
 
-  console.log(`📡 Requesting Twilio caller ID verification for: ${contact.name} (${contact.phone})`);
+  const formattedPhone = formatPhoneNumberForTwilio(contact.phone);
+  console.log(`📡 Requesting Twilio caller ID verification for: ${contact.name} (${formattedPhone})`);
 
   const params = new URLSearchParams();
-  params.append("PhoneNumber", contact.phone);
+  params.append("PhoneNumber", formattedPhone);
   params.append("FriendlyName", contact.name);
 
   fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/OutgoingCallerIds.json`, {
@@ -502,7 +519,7 @@ function verifyNumberInTwilio(contact) {
     console.log("Twilio OutgoingCallerIds validation request success:", data);
     if (data.validation_code) {
       document.getElementById("verificationContactName").innerText = contact.name;
-      document.getElementById("verificationContactPhone").innerText = contact.phone;
+      document.getElementById("verificationContactPhone").innerText = formattedPhone;
       document.getElementById("verificationCode").innerText = data.validation_code;
       document.getElementById("twilioVerificationModal").classList.remove("hidden");
     } else {
