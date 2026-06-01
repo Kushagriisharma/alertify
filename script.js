@@ -507,15 +507,22 @@ function verifyNumberInTwilio(contact) {
     },
     body: params
   })
-  .then(res => {
+  .then(async res => {
     if (!res.ok) {
-      return res.json().then(errData => {
-        throw new Error(errData.message || `HTTP error ${res.status}`);
-      });
+      const errData = await res.json().catch(() => ({}));
+      // Check if it's already verified (Twilio Error 21451 or already validated message)
+      if (errData.code === 21451 || (errData.message && errData.message.includes("already validated"))) {
+        return { isAlreadyVerified: true };
+      }
+      throw new Error(errData.message || `HTTP error ${res.status}`);
     }
     return res.json();
   })
   .then(data => {
+    if (data.isAlreadyVerified) {
+      alert(`✅ ${contact.name} (${formattedPhone}) is already verified on your Twilio account! You can start placing calls directly.`);
+      return;
+    }
     console.log("Twilio OutgoingCallerIds validation request success:", data);
     if (data.validation_code) {
       document.getElementById("verificationContactName").innerText = contact.name;
