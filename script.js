@@ -33,6 +33,9 @@ import {
 // ==========================================
 // APPLICATION CONFIGURATION & STATE
 // ==========================================
+// Default emergency message template
+const DEFAULT_SMS_TEMPLATE = "EMERGENCY! I need assistance. My current GPS location address is: {address}. Track me live on Google Maps here: {map_link}";
+
 const state = {
   currentCoords: { lat: 28.6139, lng: 77.2090 }, // Default to New Delhi (fallback coords)
   gpsAccuracy: 0,
@@ -51,8 +54,76 @@ const state = {
   placeMarkers: [],  // Array tracking nearby place markers
   currentPlaceType: "hospital", // Current places filter type
   deviceId: null,      // Unique device identifier for database isolation
-  editingContactId: null // ID of contact currently being edited
+  editingContactId: null, // ID of contact currently being edited
+  smsTemplate: "",      // Custom SMS message template
+  sirenMode: "police",  // Custom siren sound mode
+  isTestingAudio: false, // Tone testing status
+  pulsedInterval: null  // Interval tracker for pulsed beeps
 };
+
+/**
+ * Display a non-blocking glassmorphic toast notification banner.
+ * @param {string} title - The title of the toast notification.
+ * @param {string} message - The detail message content.
+ * @param {string} type - The notification category: 'success', 'warning', 'error', 'info'.
+ */
+function showToast(title, message, type = 'info') {
+  const container = document.getElementById("toastContainer");
+  if (!container) return;
+
+  // Create toast card
+  const toast = document.createElement("div");
+  toast.className = `toast toast-${type}`;
+
+  // Select appropriate icon
+  let iconClass = "fa-solid fa-circle-info";
+  if (type === "success") {
+    iconClass = "fa-solid fa-circle-check";
+  } else if (type === "warning") {
+    iconClass = "fa-solid fa-triangle-exclamation";
+  } else if (type === "error") {
+    iconClass = "fa-solid fa-circle-xmark";
+  }
+
+  toast.innerHTML = `
+    <i class="${iconClass} toast-icon"></i>
+    <div class="toast-content">
+      <div class="toast-title">${title}</div>
+      <div class="toast-message">${message}</div>
+    </div>
+    <button class="toast-close" aria-label="Dismiss">&times;</button>
+  `;
+
+  // Append toast
+  container.appendChild(toast);
+
+  // Manual dismiss
+  const closeBtn = toast.querySelector(".toast-close");
+  closeBtn.addEventListener("click", () => {
+    dismissToast(toast);
+  });
+
+  // Auto dismiss after 5 seconds
+  const autoDismissTimer = setTimeout(() => {
+    dismissToast(toast);
+  }, 5000);
+
+  // Helper to fade out and remove
+  function dismissToast(toastEl) {
+    if (toastEl.classList.contains("fade-out")) return;
+    clearTimeout(autoDismissTimer);
+    toastEl.classList.add("fade-out");
+    toastEl.addEventListener("transitionend", () => {
+      toastEl.remove();
+    });
+    // Fallback if transitionend event does not fire (e.g. element hidden or browser quirk)
+    setTimeout(() => {
+      if (toastEl.parentNode) {
+        toastEl.remove();
+      }
+    }, 400);
+  }
+}
 
 // Helper to fetch or generate a unique device ID
 function getOrCreateDeviceId() {
@@ -253,6 +324,26 @@ function initStorageEngine() {
       renderHistory();
       updateDashboardStats();
     });
+
+    // 3. Sync SMS Template from Firebase under private device ID namespace
+    const templateRef = ref(db, `devices/${state.deviceId}/sms_template`);
+    onValue(templateRef, (snapshot) => {
+      const val = snapshot.val();
+      if (val) {
+        state.smsTemplate = val;
+      } else {
+        state.smsTemplate = DEFAULT_SMS_TEMPLATE;
+      }
+      updateTemplateUI();
+    });
+
+    // 4. Sync Siren Mode from Firebase under private device ID namespace
+    const sirenRef = ref(db, `devices/${state.deviceId}/siren_mode`);
+    onValue(sirenRef, (snapshot) => {
+      const val = snapshot.val();
+      state.sirenMode = val || "police";
+      updateSirenUI();
+    });
   } else {
     // LocalStorage fallback routines
     loadLocalContacts();
@@ -266,6 +357,8 @@ function initStorageEngine() {
       localStorage.setItem("alertify_contacts_seeded", "true");
     }
     loadLocalHistory();
+    loadLocalTemplate();
+    loadLocalSirenMode();
     updateDashboardStats();
   }
 }
@@ -358,6 +451,105 @@ function loadLocalHistory() {
   renderHistory();
 }
 
+function loadLocalTemplate() {
+  const val = localStorage.getItem("alertify_sms_template");
+  if (val) {
+    state.smsTemplate = val;
+  } else {
+    state.smsTemplate = DEFAULT_SMS_TEMPLATE;
+  }
+  updateTemplateUI();
+}
+
+function saveTemplateToStorage(template) {
+  state.smsTemplate = template;
+  if (!isFirebasePlaceholder && db) {
+    const templateRef = ref(db, `devices/${state.deviceId}/sms_template`);
+    set(templateRef, template)
+      .then(() => console.log("SMS template saved to Firebase."))
+      .catch(err => console.error("Firebase template write error:", err));
+  } else {
+    localStorage.setItem("alertify_sms_template", template);
+    console.log("SMS template saved to LocalStorage.");
+  }
+  updateTemplateUI();
+}
+
+function resetTemplateInStorage() {
+  if (!isFirebasePlaceholder && db) {
+    const templateRef = ref(db, `devices/${state.deviceId}/sms_template`);
+    set(templateRef, null)
+      .then(() => console.log("SMS template reset in Firebase."))
+      .catch(err => console.error("Firebase template reset error:", err));
+  } else {
+    localStorage.removeItem("alertify_sms_template");
+    console.log("SMS template reset in LocalStorage.");
+  }
+  state.smsTemplate = DEFAULT_SMS_TEMPLATE;
+  updateTemplateUI();
+}
+
+function updateTemplateUI() {
+  const textarea = document.getElementById("messageTemplate");
+  if (textarea) {
+    textarea.value = state.smsTemplate;
+  }
+  renderTemplatePreview();
+}
+
+function renderTemplatePreview() {
+  const previewDiv = document.getElementById("templatePreview");
+  if (!previewDiv) return;
+
+  const currentTemplate = state.smsTemplate || DEFAULT_SMS_TEMPLATE;
+  const mapsLink = `https://www.google.com/maps?q=${state.currentCoords.lat},${state.currentCoords.lng}`;
+  const resolved = resolveTemplate(
+    currentTemplate,
+    state.currentCoords,
+    state.resolvedAddress,
+    mapsLink,
+    state.gpsAccuracy
+  );
+  
+  previewDiv.innerText = resolved;
+}
+
+function resolveTemplate(template, coords, address, mapLink, accuracy) {
+  if (!template) return "";
+  return template
+    .replace(/{address}/g, address || "Fetching address...")
+    .replace(/{map_link}/g, mapLink || "Generating link...")
+    .replace(/{lat}/g, coords.lat !== undefined ? coords.lat.toFixed(6) : "--")
+    .replace(/{lng}/g, coords.lng !== undefined ? coords.lng.toFixed(6) : "--")
+    .replace(/{accuracy}/g, accuracy !== undefined ? `±${accuracy.toFixed(1)}m` : "--");
+}
+
+function loadLocalSirenMode() {
+  state.sirenMode = localStorage.getItem("alertify_siren_mode") || "police";
+  updateSirenUI();
+}
+
+function saveSirenModeToStorage(mode) {
+  state.sirenMode = mode;
+  if (!isFirebasePlaceholder && db) {
+    const sirenRef = ref(db, `devices/${state.deviceId}/siren_mode`);
+    set(sirenRef, mode)
+      .then(() => console.log("Siren mode saved to Firebase."))
+      .catch(err => console.error("Firebase siren mode write error:", err));
+  } else {
+    localStorage.setItem("alertify_siren_mode", mode);
+    console.log("Siren mode saved to LocalStorage.");
+  }
+  updateSirenUI();
+}
+
+function updateSirenUI() {
+  const dashSelect = document.getElementById("sirenSelect");
+  const activeSelect = document.getElementById("activeSirenSelect");
+  if (dashSelect) dashSelect.value = state.sirenMode;
+  if (activeSelect) activeSelect.value = state.sirenMode;
+}
+
 // ==========================================
 // 3. GEOLOCATION MANAGEMENT
 // ==========================================
@@ -442,31 +634,47 @@ function formatPhoneNumberForTwilio(phone) {
   return cleaned;
 }
 
+// Determine Twilio API base URL: use local CORS proxy if running locally on localhost:8000
+const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const getTwilioUrl = (path) => {
+  return isLocalhost ? `/api/twilio/2010-04-01/Accounts/${path}` : `https://api.twilio.com/2010-04-01/Accounts/${path}`;
+};
+
 // Twilio Cloud SMS & Voice Call automated API requests
 function triggerTwilioAlerts(mapsLink) {
   if (!isTwilioConfigured) {
     console.warn("Twilio is not configured. Skipping automated call and SMS alerts.");
-    return;
+    return Promise.resolve(false);
   }
 
   const { accountSid, authToken, twilioNumber } = twilioConfig;
-  
-  // Encode Basic Authentication header
   const authHeader = "Basic " + btoa(`${accountSid}:${authToken}`);
   
+  if (state.contacts.length === 0) {
+    return Promise.resolve(true);
+  }
+
+  const promises = [];
+
   state.contacts.forEach(contact => {
     const formattedPhone = formatPhoneNumberForTwilio(contact.phone);
     console.log(`📡 Sending Twilio background alert for: ${contact.name} (To: ${formattedPhone})`);
     
     // 1. Send automatic background SMS
-    const smsBody = `ALERTIFY: EMERGENCY! Kushagri Sharma is in danger. Location address: ${state.resolvedAddress}. Track live coordinates here: ${mapsLink}`;
+    const smsBody = resolveTemplate(
+      state.smsTemplate || DEFAULT_SMS_TEMPLATE,
+      state.currentCoords,
+      state.resolvedAddress,
+      mapsLink,
+      state.gpsAccuracy
+    );
     
     const smsParams = new URLSearchParams();
     smsParams.append("To", formattedPhone);
     smsParams.append("From", twilioNumber);
     smsParams.append("Body", smsBody);
 
-    fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    const smsPromise = fetch(getTwilioUrl(`${accountSid}/Messages.json`), {
       method: "POST",
       headers: {
         "Authorization": authHeader,
@@ -474,9 +682,25 @@ function triggerTwilioAlerts(mapsLink) {
       },
       body: smsParams
     })
-    .then(res => res.json())
-    .then(data => console.log(`Twilio SMS sent to ${contact.name}:`, data.sid || data.message))
-    .catch(err => console.error(`Failed to send Twilio SMS to ${contact.name}:`, err));
+    .then(async res => {
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error ${res.status}`);
+      }
+      return res.json();
+    })
+    .then(data => {
+      console.log(`Twilio SMS sent to ${contact.name}:`, data.sid);
+      showToast("SMS Dispatched", `Automated SMS sent to ${contact.name} successfully.`, "success");
+      return true;
+    })
+    .catch(err => {
+      console.error(`Failed to send Twilio SMS to ${contact.name}:`, err);
+      showToast("SMS Failed", `Twilio SMS to ${contact.name} failed: ${err.message}`, "error");
+      return false;
+    });
+
+    promises.push(smsPromise);
 
     // 2. Place automatic voice call playing the automated speech
     const twimlCode = `<Response><Say voice="alice">Emergency! Kushagri Sharma has triggered an SOS alert and is in danger. Their location has been geocoded at ${state.resolvedAddress}. Please inspect your text messages immediately for their live Google Maps location tracking link. I repeat, check your messages to locate them. Goodbye.</Say></Response>`;
@@ -486,7 +710,7 @@ function triggerTwilioAlerts(mapsLink) {
     callParams.append("From", twilioNumber);
     callParams.append("Twiml", twimlCode);
 
-    fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Calls.json`, {
+    const callPromise = fetch(getTwilioUrl(`${accountSid}/Calls.json`), {
       method: "POST",
       headers: {
         "Authorization": authHeader,
@@ -494,10 +718,57 @@ function triggerTwilioAlerts(mapsLink) {
       },
       body: callParams
     })
-    .then(res => res.json())
-    .then(data => console.log(`Twilio Call placed to ${contact.name}:`, data.sid || data.message))
-    .catch(err => console.error(`Failed to place Twilio Call to ${contact.name}:`, err));
+    .then(async res => {
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || `HTTP error ${res.status}`);
+      }
+      return res.json();
+    })
+    .then(data => {
+      console.log(`Twilio Call placed to ${contact.name}:`, data.sid);
+      showToast("Call Dispatched", `Automated voice call placed to ${contact.name} successfully.`, "success");
+      return true;
+    })
+    .catch(err => {
+      console.error(`Failed to place Twilio Call to ${contact.name}:`, err);
+      showToast("Call Failed", `Twilio call to ${contact.name} failed: ${err.message}`, "error");
+      return false;
+    });
+
+    promises.push(callPromise);
   });
+
+  return Promise.all(promises).then(results => {
+    // If all tasks failed (results contains only false), return false. If at least one succeeded, return true.
+    return results.some(r => r === true);
+  });
+}
+
+// OS-specific native SMS dialer automatic fallback launcher
+function triggerNativeSmsFallback(mapsLink) {
+  if (state.contacts.length > 0) {
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    const separator = isIOS ? ';' : ',';
+    const allPhones = state.contacts.map(c => c.phone).join(separator);
+    
+    const emergencyMessage = resolveTemplate(
+      state.smsTemplate || DEFAULT_SMS_TEMPLATE,
+      state.currentCoords,
+      state.resolvedAddress,
+      mapsLink,
+      state.gpsAccuracy
+    );
+    const escapedMsg = encodeURIComponent(emergencyMessage);
+    const smsLink = isIOS 
+      ? `sms:${allPhones};&body=${escapedMsg}` 
+      : `sms:${allPhones}?body=${escapedMsg}`;
+    
+    setTimeout(() => {
+      console.log(`Auto-launching multi-contact SMS dialer for: ${allPhones}`);
+      window.location.href = smsLink;
+    }, 600);
+  }
 }
 
 // Programmatically verify contact caller ID in Twilio REST API on the fly
@@ -521,7 +792,7 @@ function verifyNumberInTwilio(contact) {
   params.append("PhoneNumber", formattedPhone);
   params.append("FriendlyName", contact.name);
 
-  fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/OutgoingCallerIds.json`, {
+  fetch(getTwilioUrl(`${accountSid}/OutgoingCallerIds.json`), {
     method: "POST",
     headers: {
       "Authorization": authHeader,
@@ -542,7 +813,7 @@ function verifyNumberInTwilio(contact) {
   })
   .then(data => {
     if (data.isAlreadyVerified) {
-      alert(`✅ ${contact.name} (${formattedPhone}) is already verified on your Twilio account! You can start placing calls directly.`);
+      showToast("Contact Already Verified", `${contact.name} (${formattedPhone}) is already verified on your Twilio account! You can start placing calls directly.`, "success");
       return;
     }
     console.log("Twilio OutgoingCallerIds validation request success:", data);
@@ -557,7 +828,11 @@ function verifyNumberInTwilio(contact) {
   })
   .catch(err => {
     console.error("Twilio caller ID verification failed:", err);
-    alert(`Twilio caller ID verification failed: ${err.message}`);
+    if (err.message && (err.message.includes("Authenticate") || err.message.includes("Unauthorized") || err.message.includes("401"))) {
+      showToast("Twilio Authentication Failed", "The contact was saved successfully, but dynamic Twilio background calls/SMS cannot be sent because the Twilio credentials in firebase.js are invalid or expired.", "warning");
+    } else {
+      showToast("Twilio Verification Failed", `Twilio caller ID verification failed: ${err.message}`, "error");
+    }
   });
 }
 
@@ -593,6 +868,9 @@ function updateGpsIndicators(statusStr) {
       quickStatus.innerText = "Connecting GPS...";
       systemStatus.innerHTML = `<span class="status-dot orange"></span><span class="status-text">Connecting</span>`;
     }
+  }
+  if (statusStr === "Active") {
+    renderTemplatePreview();
   }
 }
 
@@ -640,6 +918,7 @@ function updateAddressUI() {
   
   if (addressText) addressText.innerText = state.resolvedAddress;
   if (alarmAddress) alarmAddress.innerText = state.resolvedAddress;
+  renderTemplatePreview();
 }
 
 // ==========================================
@@ -763,6 +1042,9 @@ function loadLeafletMapEngine() {
   cssLink.href = "https://unpkg.com/leaflet@1.9.4/dist/leaflet.css";
   cssLink.integrity = "sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=";
   cssLink.crossOrigin = "";
+  cssLink.onerror = () => {
+    console.error("❌ Failed to load Leaflet stylesheet CDN.");
+  };
   document.head.appendChild(cssLink);
 
   // Dynamically inject Leaflet JavaScript code
@@ -774,6 +1056,24 @@ function loadLeafletMapEngine() {
   scriptTag.onload = () => {
     console.log("✅ Leaflet.js loaded successfully.");
     initLeafletMaps();
+  };
+
+  scriptTag.onerror = () => {
+    console.error("❌ Failed to load Leaflet script CDN offline.");
+    const mapElement = document.getElementById("googleMap");
+    const placesMapElement = document.getElementById("placesMap");
+    
+    const fallbackHTML = `
+      <div class="map-placeholder" style="padding: 2rem; text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;">
+        <i class="fa-solid fa-plane-slash fa-3x text-muted" style="margin-bottom: 1rem;"></i>
+        <h3>Map Service Offline</h3>
+        <p class="text-secondary" style="font-size: 0.9rem; margin-top: 0.5rem; max-width: 320px; line-height: 1.4;">
+          The offline mapping engine could not be initialized. GPS satellite location tracking remains active.
+        </p>
+      </div>`;
+      
+    if (mapElement) mapElement.innerHTML = fallbackHTML;
+    if (placesMapElement) placesMapElement.innerHTML = fallbackHTML;
   };
 
   document.head.appendChild(scriptTag);
@@ -945,25 +1245,16 @@ function triggerSosEmergency() {
   const isOnline = navigator.onLine;
   if (isOnline && isTwilioConfigured) {
     // Cloud Mode: Background automatic calls and texts
-    triggerTwilioAlerts(mapsLink);
+    triggerTwilioAlerts(mapsLink).then(anySucceeded => {
+      if (!anySucceeded) {
+        console.warn("Twilio background alerts failed. Routing to native SMS fallback.");
+        showToast("Twilio Failure", "Background SOS alerts failed to dispatch. Redirecting to manual SMS fallback...", "warning");
+        triggerNativeSmsFallback(mapsLink);
+      }
+    });
   } else {
     // Offline/Fallback Mode: Launch OS-specific native SMS dialer
-    if (state.contacts.length > 0) {
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-      const separator = isIOS ? ';' : ',';
-      const allPhones = state.contacts.map(c => c.phone).join(separator);
-      
-      const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
-      const escapedMsg = encodeURIComponent(emergencyMessage);
-      const smsLink = isIOS 
-        ? `sms:${allPhones};&body=${escapedMsg}` 
-        : `sms:${allPhones}?body=${escapedMsg}`;
-      
-      setTimeout(() => {
-        console.log(`Auto-launching multi-contact SMS dialer for: ${allPhones}`);
-        window.location.href = smsLink;
-      }, 600);
-    }
+    triggerNativeSmsFallback(mapsLink);
   }
 }
 
@@ -1018,45 +1309,101 @@ function playBeepSound(frequency, duration) {
 }
 
 function startSirenSoundLoop() {
+  // First clean up any existing sound loop
+  stopSirenSoundLoop();
+
+  if (state.sirenMode === "silent") {
+    console.log("Silent mode active. Local audio muted.");
+    return;
+  }
+
   try {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    sirenOsc1 = audioCtx.createOscillator();
-    sirenOsc2 = audioCtx.createOscillator();
     sirenGain = audioCtx.createGain();
-
-    sirenOsc1.type = "sawtooth";
-    sirenOsc2.type = "sine";
-    
-    sirenOsc1.frequency.value = 600; // Police tone starting freq
-    sirenOsc2.frequency.value = 5;   // Modulation speed (Hz)
-    
-    const modGain = audioCtx.createGain();
-    modGain.gain.value = 150;        // Frequency swing range (Hz)
-    
-    // Connect modulator to oscillator frequency
-    sirenOsc2.connect(modGain);
-    modGain.connect(sirenOsc1.frequency);
-    
-    // Connect output
-    sirenOsc1.connect(sirenGain);
-    sirenGain.connect(audioCtx.destination);
-    
     sirenGain.gain.setValueAtTime(0.15, audioCtx.currentTime); // Siren volume
-    
-    sirenOsc1.start();
-    sirenOsc2.start();
+    sirenGain.connect(audioCtx.destination);
+
+    if (state.sirenMode === "police") {
+      sirenOsc1 = audioCtx.createOscillator();
+      sirenOsc2 = audioCtx.createOscillator();
+      
+      sirenOsc1.type = "sawtooth";
+      sirenOsc2.type = "sine";
+      
+      sirenOsc1.frequency.value = 600; // Police tone starting freq
+      sirenOsc2.frequency.value = 5;   // Modulation speed (Hz)
+      
+      const modGain = audioCtx.createGain();
+      modGain.gain.value = 150;        // Frequency swing range (Hz)
+      
+      sirenOsc2.connect(modGain);
+      modGain.connect(sirenOsc1.frequency);
+      
+      sirenOsc1.connect(sirenGain);
+      
+      sirenOsc1.start();
+      sirenOsc2.start();
+      
+    } else if (state.sirenMode === "piercing") {
+      sirenOsc1 = audioCtx.createOscillator();
+      sirenOsc2 = audioCtx.createOscillator();
+      
+      sirenOsc1.type = "triangle";
+      sirenOsc2.type = "sine";
+      
+      sirenOsc1.frequency.value = 1000; // Starting freq (High)
+      sirenOsc2.frequency.value = 10;   // Modulate fast (10Hz)
+      
+      const modGain = audioCtx.createGain();
+      modGain.gain.value = 500;         // Wide sweep range (500Hz-1500Hz)
+      
+      sirenOsc2.connect(modGain);
+      modGain.connect(sirenOsc1.frequency);
+      
+      sirenOsc1.connect(sirenGain);
+      
+      sirenOsc1.start();
+      sirenOsc2.start();
+      
+    } else if (state.sirenMode === "pulsed") {
+      sirenOsc1 = audioCtx.createOscillator();
+      sirenOsc1.type = "sine";
+      sirenOsc1.frequency.value = 880; // High pitch A note
+      sirenOsc1.connect(sirenGain);
+      sirenOsc1.start();
+      
+      let isBeepOn = true;
+      state.pulsedInterval = setInterval(() => {
+        if (sirenGain && audioCtx) {
+          if (isBeepOn) {
+            sirenGain.gain.setValueAtTime(0.001, audioCtx.currentTime); // fade out
+          } else {
+            sirenGain.gain.setValueAtTime(0.15, audioCtx.currentTime);  // fade in
+          }
+          isBeepOn = !isBeepOn;
+        }
+      }, 250); // Pulse every 250ms
+    }
   } catch (e) {
     console.warn("Siren synthesis failed:", e);
   }
 }
 
 function stopSirenSoundLoop() {
+  if (state.pulsedInterval) {
+    clearInterval(state.pulsedInterval);
+    state.pulsedInterval = null;
+  }
   if (sirenOsc1) {
     try {
       sirenOsc1.stop();
-      sirenOsc2.stop();
     } catch(e){}
     sirenOsc1 = null;
+  }
+  if (sirenOsc2) {
+    try {
+      sirenOsc2.stop();
+    } catch(e){}
     sirenOsc2 = null;
   }
   if (audioCtx) {
@@ -1064,6 +1411,54 @@ function stopSirenSoundLoop() {
       audioCtx.close();
     } catch(e){}
     audioCtx = null;
+  }
+  sirenGain = null;
+}
+
+let testAudioTimeout = null;
+
+function startTestAudio() {
+  if (state.isTestingAudio) {
+    stopTestAudio();
+    return;
+  }
+  
+  if (state.isAlarmActive) {
+    console.warn("Alarm is already active, cannot run sound tests.");
+    return;
+  }
+
+  state.isTestingAudio = true;
+  const testBtn = document.getElementById("testAudioBtn");
+  if (testBtn) {
+    testBtn.innerHTML = `<i class="fa-solid fa-circle-stop"></i> Stop Testing`;
+    testBtn.classList.remove("btn-secondary");
+    testBtn.classList.add("btn-primary");
+  }
+
+  startSirenSoundLoop();
+
+  testAudioTimeout = setTimeout(() => {
+    stopTestAudio();
+  }, 2500); // Play test for 2.5s
+}
+
+function stopTestAudio() {
+  if (!state.isTestingAudio) return;
+  
+  state.isTestingAudio = false;
+  if (testAudioTimeout) {
+    clearTimeout(testAudioTimeout);
+    testAudioTimeout = null;
+  }
+
+  stopSirenSoundLoop();
+
+  const testBtn = document.getElementById("testAudioBtn");
+  if (testBtn) {
+    testBtn.innerHTML = `<i class="fa-solid fa-circle-play"></i> Test Audio Tone`;
+    testBtn.classList.remove("btn-primary");
+    testBtn.classList.add("btn-secondary");
   }
 }
 
@@ -1182,7 +1577,13 @@ function renderAlarmContactsGrid(mapsLink) {
   alarmContactsList.innerHTML = "";
   state.contacts.forEach(contact => {
     // Dynamic text bodies
-    const emergencyMessage = `EMERGENCY! I need assistance. My current GPS location address is: ${state.resolvedAddress}. Track me live on Google Maps here: ${mapsLink}`;
+    const emergencyMessage = resolveTemplate(
+      state.smsTemplate || DEFAULT_SMS_TEMPLATE,
+      state.currentCoords,
+      state.resolvedAddress,
+      mapsLink,
+      state.gpsAccuracy
+    );
     const escapedMsg = encodeURIComponent(emergencyMessage);
 
     const row = document.createElement("div");
@@ -1601,7 +2002,7 @@ function setupEventListeners() {
           console.error("Manual GPS Refresh error:", error);
           refreshLocationBtn.innerHTML = originalText;
           refreshLocationBtn.disabled = false;
-          alert(`Failed to update location: ${error.message}`);
+          showToast("GPS Update Failed", `Failed to update location: ${error.message}`, "error");
         },
         { enableHighAccuracy: true, timeout: 5000 }
       );
@@ -1624,6 +2025,134 @@ function setupEventListeners() {
     closeVerificationBtn.addEventListener("click", () => {
       document.getElementById("twilioVerificationModal").classList.add("hidden");
     });
+  }
+
+  // Message Template Textarea Input
+  const messageTemplateTextarea = document.getElementById("messageTemplate");
+  if (messageTemplateTextarea) {
+    messageTemplateTextarea.addEventListener("input", () => {
+      state.smsTemplate = messageTemplateTextarea.value;
+      renderTemplatePreview();
+    });
+  }
+
+  // Quick Insertion Tag Buttons
+  const tagButtons = document.querySelectorAll(".template-tags-container .tag-btn");
+  tagButtons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const tag = btn.getAttribute("data-tag");
+      const textarea = document.getElementById("messageTemplate");
+      if (textarea && tag) {
+        const startPos = textarea.selectionStart;
+        const endPos = textarea.selectionEnd;
+        const text = textarea.value;
+        
+        // Insert tag at cursor position
+        textarea.value = text.substring(0, startPos) + tag + text.substring(endPos);
+        
+        // Move cursor to just after the inserted tag
+        textarea.focus();
+        const cursorPosition = startPos + tag.length;
+        textarea.setSelectionRange(cursorPosition, cursorPosition);
+        
+        // Update state and preview
+        state.smsTemplate = textarea.value;
+        renderTemplatePreview();
+      }
+    });
+  });
+
+  // Save Custom Message Template Form
+  const templateForm = document.getElementById("templateForm");
+  if (templateForm) {
+    templateForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const val = document.getElementById("messageTemplate").value.trim();
+      saveTemplateToStorage(val);
+      showToast("Template Saved", "SOS Emergency Message Template saved successfully!", "success");
+    });
+  }
+
+  // Reset Template to Default Button
+  const resetTemplateBtn = document.getElementById("resetTemplateBtn");
+  if (resetTemplateBtn) {
+    resetTemplateBtn.addEventListener("click", () => {
+      if (confirm("Are you sure you want to reset the message template to default?")) {
+        resetTemplateInStorage();
+      }
+    });
+  }
+
+  // Dashboard Siren Selection Change
+  const sirenSelect = document.getElementById("sirenSelect");
+  if (sirenSelect) {
+    sirenSelect.addEventListener("change", (e) => {
+      saveSirenModeToStorage(e.target.value);
+    });
+  }
+
+  // Active Overlay Siren Selection Change
+  const activeSirenSelect = document.getElementById("activeSirenSelect");
+  if (activeSirenSelect) {
+    activeSirenSelect.addEventListener("change", (e) => {
+      saveSirenModeToStorage(e.target.value);
+      // Dynamically switch sound loop if the alarm is currently active
+      if (state.isAlarmActive) {
+        startSirenSoundLoop();
+      }
+    });
+  }
+
+  // Test Audio Tone Button Click
+  const testAudioBtn = document.getElementById("testAudioBtn");
+  if (testAudioBtn) {
+    testAudioBtn.addEventListener("click", () => {
+      startTestAudio();
+    });
+  }
+
+  // Twilio Settings Form Handlers
+  const settingsForm = document.getElementById("settingsForm");
+  if (settingsForm) {
+    // Populate form inputs with current loaded values
+    document.getElementById("settingsAccountSid").value = (twilioConfig.accountSid && twilioConfig.accountSid !== "YOUR_TWILIO_ACCOUNT_SID") ? twilioConfig.accountSid : "";
+    document.getElementById("settingsAuthToken").value = (twilioConfig.authToken && twilioConfig.authToken !== "YOUR_TWILIO_AUTH_TOKEN") ? twilioConfig.authToken : "";
+    document.getElementById("settingsTwilioNumber").value = (twilioConfig.twilioNumber && twilioConfig.twilioNumber !== "YOUR_TWILIO_PHONE_NUMBER") ? twilioConfig.twilioNumber : "";
+
+    settingsForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const sid = document.getElementById("settingsAccountSid").value.trim();
+      const token = document.getElementById("settingsAuthToken").value.trim();
+      const phone = document.getElementById("settingsTwilioNumber").value.trim();
+
+      if (!sid || !token || !phone) {
+        showToast("Validation Error", "All Twilio fields must be filled to configure the gateway.", "error");
+        return;
+      }
+
+      localStorage.setItem("alertify_twilio_sid", sid);
+      localStorage.setItem("alertify_twilio_token", token);
+      localStorage.setItem("alertify_twilio_phone", phone);
+
+      showToast("Settings Saved", "Twilio credentials saved successfully. Reloading system...", "success");
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
+    });
+
+    const clearSettingsBtn = document.getElementById("clearSettingsBtn");
+    if (clearSettingsBtn) {
+      clearSettingsBtn.addEventListener("click", () => {
+        localStorage.removeItem("alertify_twilio_sid");
+        localStorage.removeItem("alertify_twilio_token");
+        localStorage.removeItem("alertify_twilio_phone");
+        
+        showToast("Settings Reset", "Credentials reset to defaults. Reloading system...", "info");
+        setTimeout(() => {
+          window.location.reload();
+        }, 1500);
+      });
+    }
   }
 }
 

@@ -64,6 +64,10 @@
           <i class="fa-solid fa-clock-rotate-left"></i>
           <span>History</span>
         </li>
+        <li class="nav-item" data-target="settings-section">
+          <i class="fa-solid fa-sliders"></i>
+          <span>Settings</span>
+        </li>
         <li class="nav-item" data-target="about-section">
           <i class="fa-solid fa-circle-info"></i>
           <span>About</span>
@@ -92,36 +96,60 @@
             <p>In case of emergency, press and hold the SOS button below. This will locate you and notify your saved contacts instantly.</p>
           </div>
 
-          <div class="sos-action-card card glass-card text-center">
-            <div class="sos-button-wrapper">
-              <div class="pulse-ring ring-1"></div>
-              <div class="pulse-ring ring-2"></div>
-              <button id="sosBtn" class="sos-button">
-                <span class="sos-text">SOS</span>
-                <span class="sos-subtext">Tap to Trigger</span>
-              </button>
+          <div class="dashboard-column">
+            <div class="sos-action-card card glass-card text-center">
+              <div class="sos-button-wrapper">
+                <div class="pulse-ring ring-1"></div>
+                <div class="pulse-ring ring-2"></div>
+                <button id="sosBtn" class="sos-button">
+                  <span class="sos-text">SOS</span>
+                  <span class="sos-subtext">Tap to Trigger</span>
+                </button>
+              </div>
+              <div class="sos-status-indicator">
+                <span id="quickStatus">GPS Ready</span>
+              </div>
             </div>
-            <div class="sos-status-indicator">
-              <span id="quickStatus">GPS Ready</span>
+
+            <!-- Siren Configuration Card -->
+            <div class="card glass-card" style="margin-top: 1.5rem;">
+              <h2><i class="fa-solid fa-volume-high text-red"></i> Emergency Alarm Tone</h2>
+              <p class="section-desc" style="font-size: 0.85rem; margin-bottom: 1rem;">Select the sound pattern that will blast locally when SOS is triggered.</p>
+              <div class="styled-form" style="margin-top: 0;">
+                <div class="form-group">
+                  <label for="sirenSelect">Select Tone Mode</label>
+                  <select id="sirenSelect">
+                    <option value="police">Police Siren (Classic)</option>
+                    <option value="piercing">Piercing Sweep (High Freq)</option>
+                    <option value="pulsed">Pulsed Beeps (Warning Alert)</option>
+                    <option value="silent">Silent Distress (No Sound)</option>
+                  </select>
+                </div>
+                <button type="button" id="testAudioBtn" class="btn btn-secondary btn-block" style="margin-top: 0.5rem;">
+                  <i class="fa-solid fa-circle-play"></i> Test Audio Tone
+                </button>
+              </div>
             </div>
           </div>
 
-          <div class="status-summary-card card glass-card">
-            <h3>Quick Status</h3>
-            <div class="status-info-row">
-              <div class="status-info-col">
-                <span class="info-label">Current Lat/Lng</span>
-                <span class="info-value" id="dashCoords">Fetching location...</span>
+          <div class="dashboard-column">
+            <div class="status-summary-card card glass-card">
+              <h3>Quick Status</h3>
+              <div class="status-info-row">
+                <div class="status-info-col">
+                  <span class="info-label">Current Lat/Lng</span>
+                  <span class="info-value" id="dashCoords">Fetching location...</span>
+                </div>
+                <div class="status-info-col">
+                  <span class="info-label">Active Contacts</span>
+                  <span class="info-value" id="dashContactsCount">0 Contacts</span>
+                </div>
               </div>
-              <div class="status-info-col">
-                <span class="info-label">Active Contacts</span>
-                <span class="info-value" id="dashContactsCount">0 Contacts</span>
-              </div>
-            </div>
-            <div class="status-info-row">
-              <div class="status-info-col">
-                <span class="info-label">Last Alert Triggered</span>
-                <span class="info-value" id="dashLastAlert">No alerts yet</span>
+              <div class="status-info-row">
+                <div class="status-info-col">
+                  <span class="info-label">Last Alert Triggered</span>
+                  <span class="info-value" id="dashLastAlert">No alerts yet</span>
+                </div>
               </div>
             </div>
           </div>
@@ -173,35 +201,72 @@
         <div class="section-container">
           <div class="contacts-grid">
             
-            <!-- Contact Creation Form -->
-            <div class="card glass-card">
-              <h2><i class="fa-solid fa-user-plus text-red"></i> Add Emergency Contact</h2>
-              <form id="contactForm" class="styled-form">
-                <div class="form-group">
-                  <label for="contactName">Full Name</label>
-                  <input type="text" id="contactName" required placeholder="e.g. Jane Doe">
-                </div>
-                <div class="form-group">
-                  <label for="contactPhone">Phone Number</label>
-                  <input type="tel" id="contactPhone" required placeholder="e.g. +1 555-0199">
-                </div>
-                <div class="form-group">
-                  <label for="contactRelation">Relationship</label>
-                  <select id="contactRelation" required>
-                    <option value="" disabled selected>Select relationship</option>
-                    <option value="Parent">Parent</option>
-                    <option value="Spouse">Spouse / Partner</option>
-                    <option value="Sibling">Sibling</option>
-                    <option value="Relative">Relative</option>
-                    <option value="Friend">Friend</option>
-                    <option value="Neighbor">Neighbor</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-                <button type="submit" class="btn btn-primary btn-block">
-                  <i class="fa-solid fa-save"></i> Save Contact
-                </button>
-              </form>
+            <div class="contacts-sidebar">
+              <!-- Contact Creation Form -->
+              <div class="card glass-card">
+                <h2><i class="fa-solid fa-user-plus text-red"></i> Add Emergency Contact</h2>
+                <form id="contactForm" class="styled-form">
+                  <div class="form-group">
+                    <label for="contactName">Full Name</label>
+                    <input type="text" id="contactName" required placeholder="e.g. Jane Doe">
+                  </div>
+                  <div class="form-group">
+                    <label for="contactPhone">Phone Number</label>
+                    <input type="tel" id="contactPhone" required placeholder="e.g. +1 555-0199">
+                  </div>
+                  <div class="form-group">
+                    <label for="contactRelation">Relationship</label>
+                    <select id="contactRelation" required>
+                      <option value="" disabled selected>Select relationship</option>
+                      <option value="Parent">Parent</option>
+                      <option value="Spouse">Spouse / Partner</option>
+                      <option value="Sibling">Sibling</option>
+                      <option value="Relative">Relative</option>
+                      <option value="Friend">Friend</option>
+                      <option value="Neighbor">Neighbor</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <button type="submit" class="btn btn-primary btn-block">
+                    <i class="fa-solid fa-save"></i> Save Contact
+                  </button>
+                </form>
+              </div>
+
+              <!-- Customize SOS Message Template -->
+              <div class="card glass-card" style="margin-top: 1.5rem;">
+                <h2><i class="fa-solid fa-envelope-open-text text-red"></i> Customize SOS Message</h2>
+                <p class="section-desc">Personalize the emergency message sent to your trusted contacts.</p>
+                <form id="templateForm" class="styled-form">
+                  <div class="form-group">
+                    <label for="messageTemplate">Message Template</label>
+                    <textarea id="messageTemplate" required placeholder="Write emergency template..." rows="4"></textarea>
+                    
+                    <span class="info-label" style="margin-top: 0.5rem; display: block;">Quick Add Tags:</span>
+                    <div class="template-tags-container">
+                      <button type="button" class="tag-btn" data-tag="{address}">{address}</button>
+                      <button type="button" class="tag-btn" data-tag="{map_link}">{map_link}</button>
+                      <button type="button" class="tag-btn" data-tag="{lat}">{lat}</button>
+                      <button type="button" class="tag-btn" data-tag="{lng}">{lng}</button>
+                      <button type="button" class="tag-btn" data-tag="{accuracy}">{accuracy}</button>
+                    </div>
+                  </div>
+                  
+                  <div class="form-group">
+                    <span class="info-label">Live Preview:</span>
+                    <div id="templatePreview" class="template-preview-box">Resolving message...</div>
+                  </div>
+
+                  <div style="display: flex; gap: 0.5rem;">
+                    <button type="submit" class="btn btn-primary" style="flex: 1;">
+                      <i class="fa-solid fa-save"></i> Save Message
+                    </button>
+                    <button type="button" id="resetTemplateBtn" class="btn btn-secondary">
+                      <i class="fa-solid fa-rotate-left"></i> Reset
+                    </button>
+                  </div>
+                </form>
+              </div>
             </div>
 
             <!-- Contacts List Panel -->
@@ -290,7 +355,47 @@
         </div>
       </section>
 
-      <!-- 6. ABOUT SECTION -->
+      <!-- 6. SETTINGS SECTION -->
+      <section id="settings-section" class="app-section">
+        <div class="section-container max-w-700">
+          <div class="card glass-card">
+            <h2><i class="fa-solid fa-sliders text-red"></i> System Settings</h2>
+            <p class="section-desc" style="font-size: 0.85rem; margin-bottom: 1.5rem;">Configure your custom service keys to enable automated background emergency operations.</p>
+            
+            <form id="settingsForm" class="styled-form" style="margin-top: 0;">
+              <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--text-primary); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
+                <i class="fa-solid fa-phone-volume text-red"></i> Twilio API Gateway
+              </h3>
+              
+              <div class="form-group">
+                <label for="settingsAccountSid">Twilio Account SID</label>
+                <input type="text" id="settingsAccountSid" placeholder="e.g. ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+              </div>
+              
+              <div class="form-group">
+                <label for="settingsAuthToken">Twilio Auth Token</label>
+                <input type="password" id="settingsAuthToken" placeholder="Paste your Twilio Auth Token">
+              </div>
+              
+              <div class="form-group">
+                <label for="settingsTwilioNumber">Twilio Phone Number</label>
+                <input type="tel" id="settingsTwilioNumber" placeholder="e.g. +17692474423">
+              </div>
+
+              <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
+                <button type="submit" class="btn btn-primary" style="flex: 1;">
+                  <i class="fa-solid fa-save"></i> Save Settings
+                </button>
+                <button type="button" id="clearSettingsBtn" class="btn btn-secondary">
+                  <i class="fa-solid fa-trash"></i> Reset to Defaults
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+      <!-- 7. ABOUT SECTION -->
       <section id="about-section" class="app-section">
         <div class="section-container max-w-700">
           <div class="card glass-card">
@@ -376,6 +481,21 @@
         </a>
       </div>
 
+      <!-- Active Siren Sound Toggle Card -->
+      <div class="card glass-card max-w-500 text-center" style="margin: 1.5rem auto; padding: 1rem 1.5rem;">
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 1rem;">
+          <span style="font-weight: 600; font-size: 0.95rem; display: flex; align-items: center; gap: 0.5rem; color: var(--text-primary);">
+            <i class="fa-solid fa-volume-high text-red"></i> Alarm Sound:
+          </span>
+          <select id="activeSirenSelect" style="background: rgba(0, 0, 0, 0.4); border: 1px solid var(--border-color); padding: 0.4rem 0.8rem; border-radius: 8px; font-size: 0.85rem; font-weight: 500; cursor: pointer; color: var(--text-primary); outline: none;">
+            <option value="police">Police Siren</option>
+            <option value="piercing">Piercing Sweep</option>
+            <option value="pulsed">Pulsed Beeps</option>
+            <option value="silent">Silent Mode (Muted)</option>
+          </select>
+        </div>
+      </div>
+
       <div class="notified-contacts-box max-w-500 card glass-card">
         <h3>Contact Options</h3>
         <p class="sms-desc">Send alert message templates or call your saved emergency contacts immediately:</p>
@@ -425,6 +545,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <!-- Google Maps JavaScript API (Loads asynchronously) -->
   <!-- NOTE: "YOUR_GOOGLE_MAPS_API_KEY" is a placeholder which the user will replace. -->

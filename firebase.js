@@ -66,14 +66,21 @@ export {
   off 
 };
 
-// Twilio Cloud API Configuration - Replace with your credentials for automated calls
+// Twilio Cloud API Configuration - Load dynamic keys from localStorage or fallback to defaults
+const savedSid = localStorage.getItem("alertify_twilio_sid");
+const savedToken = localStorage.getItem("alertify_twilio_token");
+const savedPhone = localStorage.getItem("alertify_twilio_phone");
+
 const twilioConfig = {
-  accountSid: "AC30b84d8da5028310f97347b6babd4356",
-  authToken: "e810fe411c650c1e41bf5eed1f6ce680",
-  twilioNumber: "+17692474423"
+  accountSid: savedSid || "AC30b84d8da5028310f97347b6babd4356",
+  authToken: savedToken || "13ffcd9b703d43840c8552dcf267dfc4",
+  twilioNumber: savedPhone || "+17692474423"
 };
 
 const isTwilioConfigured = 
+  twilioConfig.accountSid && 
+  twilioConfig.authToken && 
+  twilioConfig.twilioNumber &&
   twilioConfig.accountSid !== "YOUR_TWILIO_ACCOUNT_SID" && 
   twilioConfig.authToken !== "YOUR_TWILIO_AUTH_TOKEN" && 
   twilioConfig.twilioNumber !== "YOUR_TWILIO_PHONE_NUMBER";
