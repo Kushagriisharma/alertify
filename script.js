@@ -296,13 +296,6 @@ function initStorageEngine() {
           state.contacts.push({ id: key, ...data[key] });
         });
       } else if (!isSeeded) {
-        // Automatically seed the user's contact numbers on first load
-        const defaultContacts = [
-          { name: "Support Contact 1", phone: "9079945728", relationship: "Relative" },
-          { name: "Support Contact 2", phone: "9079397361", relationship: "Relative" },
-          { name: "Support Contact 3", phone: "6376189404", relationship: "Friend" }
-        ];
-        defaultContacts.forEach(c => saveContactToStorage(c));
         localStorage.setItem("alertify_contacts_seeded", "true");
       }
       renderContacts();
@@ -348,12 +341,6 @@ function initStorageEngine() {
     // LocalStorage fallback routines
     loadLocalContacts();
     if (state.contacts.length === 0 && !isSeeded) {
-      const defaultContacts = [
-        { name: "Support Contact 1", phone: "9079945728", relationship: "Relative" },
-        { name: "Support Contact 2", phone: "9079397361", relationship: "Relative" },
-        { name: "Support Contact 3", phone: "6376189404", relationship: "Friend" }
-      ];
-      defaultContacts.forEach(c => saveContactToStorage(c));
       localStorage.setItem("alertify_contacts_seeded", "true");
     }
     loadLocalHistory();
