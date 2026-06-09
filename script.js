@@ -27,7 +27,12 @@ import {
   get,
   off,
   twilioConfig,
-  isTwilioConfigured
+  isTwilioConfigured,
+  auth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
 } from "./firebase.js";
 
 // ==========================================
@@ -58,7 +63,12 @@ const state = {
   smsTemplate: "",      // Custom SMS message template
   sirenMode: "police",  // Custom siren sound mode
   isTestingAudio: false, // Tone testing status
-  pulsedInterval: null  // Interval tracker for pulsed beeps
+  pulsedInterval: null,  // Interval tracker for pulsed beeps
+  currentUser: null,     // Logged in user info
+  firebaseContactsRef: null,
+  firebaseHistoryRef: null,
+  firebaseTemplateRef: null,
+  firebaseSirenRef: null
 };
 
 /**
@@ -144,7 +154,7 @@ function getOrCreateDeviceId() {
 document.addEventListener("DOMContentLoaded", () => {
   getOrCreateDeviceId(); // Load or generate private device identifier
   initAppNavigation();
-  initStorageEngine();
+  initAuthSystem();
   startLiveGPSWatch();
   initMapManager();
   setupEventListeners();
@@ -283,11 +293,17 @@ function refreshMapsLayout() {
 // 2. STORAGE ENGINE (FIREBASE OR LOCALSTORAGE)
 // ==========================================
 function initStorageEngine() {
-  const isSeeded = localStorage.getItem("alertify_contacts_seeded");
+  if (!state.currentUser) return;
 
-  if (!isFirebasePlaceholder && db) {
-    // 1. Sync Contacts from Firebase under private device ID namespace
-    const contactsRef = ref(db, `devices/${state.deviceId}/contacts`);
+  const userKey = state.currentUser.uid;
+  const isSeeded = localStorage.getItem(`alertify_contacts_seeded_${state.currentUser.email}`);
+
+  if (state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    // 1. Sync Contacts from Firebase under user-specific namespace
+    const contactsRef = ref(db, `users/${userKey}/contacts`);
+    if (state.firebaseContactsRef) off(state.firebaseContactsRef);
+    state.firebaseContactsRef = contactsRef;
+
     onValue(contactsRef, (snapshot) => {
       const data = snapshot.val();
       state.contacts = [];
@@ -295,15 +311,16 @@ function initStorageEngine() {
         Object.keys(data).forEach(key => {
           state.contacts.push({ id: key, ...data[key] });
         });
-      } else if (!isSeeded) {
-        localStorage.setItem("alertify_contacts_seeded", "true");
       }
       renderContacts();
       updateDashboardStats();
     });
 
-    // 2. Sync History logs from Firebase under private device ID namespace
-    const historyRef = ref(db, `devices/${state.deviceId}/history`);
+    // 2. Sync History logs from Firebase under user-specific namespace
+    const historyRef = ref(db, `users/${userKey}/history`);
+    if (state.firebaseHistoryRef) off(state.firebaseHistoryRef);
+    state.firebaseHistoryRef = historyRef;
+
     onValue(historyRef, (snapshot) => {
       const data = snapshot.val();
       state.history = [];
@@ -318,20 +335,22 @@ function initStorageEngine() {
       updateDashboardStats();
     });
 
-    // 3. Sync SMS Template from Firebase under private device ID namespace
-    const templateRef = ref(db, `devices/${state.deviceId}/sms_template`);
+    // 3. Sync SMS Template from Firebase under user-specific namespace
+    const templateRef = ref(db, `users/${userKey}/sms_template`);
+    if (state.firebaseTemplateRef) off(state.firebaseTemplateRef);
+    state.firebaseTemplateRef = templateRef;
+
     onValue(templateRef, (snapshot) => {
       const val = snapshot.val();
-      if (val) {
-        state.smsTemplate = val;
-      } else {
-        state.smsTemplate = DEFAULT_SMS_TEMPLATE;
-      }
+      state.smsTemplate = val || DEFAULT_SMS_TEMPLATE;
       updateTemplateUI();
     });
 
-    // 4. Sync Siren Mode from Firebase under private device ID namespace
-    const sirenRef = ref(db, `devices/${state.deviceId}/siren_mode`);
+    // 4. Sync Siren Mode from Firebase under user-specific namespace
+    const sirenRef = ref(db, `users/${userKey}/siren_mode`);
+    if (state.firebaseSirenRef) off(state.firebaseSirenRef);
+    state.firebaseSirenRef = sirenRef;
+
     onValue(sirenRef, (snapshot) => {
       const val = snapshot.val();
       state.sirenMode = val || "police";
@@ -341,7 +360,7 @@ function initStorageEngine() {
     // LocalStorage fallback routines
     loadLocalContacts();
     if (state.contacts.length === 0 && !isSeeded) {
-      localStorage.setItem("alertify_contacts_seeded", "true");
+      localStorage.setItem(`alertify_contacts_seeded_${state.currentUser.email}`, "true");
     }
     loadLocalHistory();
     loadLocalTemplate();
@@ -350,98 +369,286 @@ function initStorageEngine() {
   }
 }
 
+// ==========================================
+// AUTHENTICATION SYSTEM & ACCESS CONTROL
+// ==========================================
+function initAuthSystem() {
+  const authOverlay = document.getElementById("authOverlay");
+  const appContainer = document.querySelector(".app-container");
+  const loginForm = document.getElementById("loginForm");
+  const signupForm = document.getElementById("signupForm");
+  const loginTabBtn = document.getElementById("loginTabBtn");
+  const signupTabBtn = document.getElementById("signupTabBtn");
+  const authModeWarning = document.getElementById("authModeWarning");
+  const userProfileEmail = document.getElementById("userProfileEmail");
+  const logoutBtn = document.getElementById("logoutBtn");
+
+  if (isFirebasePlaceholder) {
+    authModeWarning.innerHTML = `<i class="fa-solid fa-cloud-slash"></i> Offline mode: accounts stored locally`;
+  } else {
+    authModeWarning.innerHTML = `<i class="fa-solid fa-cloud"></i> Firebase Cloud sync enabled`;
+  }
+
+  // 1. Tab switching
+  loginTabBtn.addEventListener("click", () => {
+    loginTabBtn.classList.add("active");
+    signupTabBtn.classList.remove("active");
+    loginForm.classList.remove("hidden");
+    signupForm.classList.add("hidden");
+  });
+
+  signupTabBtn.addEventListener("click", () => {
+    signupTabBtn.classList.add("active");
+    loginTabBtn.classList.remove("active");
+    signupForm.classList.remove("hidden");
+    loginForm.classList.add("hidden");
+  });
+
+  // 2. Register Form submit
+  signupForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = document.getElementById("signupEmail").value.trim();
+    const password = document.getElementById("signupPassword").value;
+    const confirmPassword = document.getElementById("signupConfirmPassword").value;
+
+    if (password.length < 6) {
+      showToast("Weak Password", "Password must be at least 6 characters.", "warning");
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showToast("Password Mismatch", "Passwords do not match.", "error");
+      return;
+    }
+
+    if (!isFirebasePlaceholder && auth) {
+      createUserWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => {
+          showToast("Registration Success", "Account created successfully!", "success");
+          signupForm.reset();
+          loginTabBtn.click();
+        })
+        .catch((error) => {
+          console.error("Firebase Auth Error:", error);
+          showToast("Registration Failed", error.message, "error");
+        });
+    } else {
+      const localUsers = JSON.parse(localStorage.getItem("alertify_local_users")) || {};
+      if (localUsers[email]) {
+        showToast("User Exists", "This email is already registered locally.", "warning");
+        return;
+      }
+      localUsers[email] = password;
+      localStorage.setItem("alertify_local_users", JSON.stringify(localUsers));
+      showToast("Registration Success", "Account created locally!", "success");
+      signupForm.reset();
+      loginTabBtn.click();
+    }
+  });
+
+  // 3. Login Form submit
+  loginForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const email = document.getElementById("loginEmail").value.trim();
+    const password = document.getElementById("loginPassword").value;
+
+    if (!isFirebasePlaceholder && auth) {
+      signInWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => {
+          showToast("Login Success", `Welcome back, ${email}!`, "success");
+          loginForm.reset();
+        })
+        .catch((error) => {
+          console.error("Firebase Login Error:", error);
+          showToast("Login Failed", error.message, "error");
+        });
+    } else {
+      const localUsers = JSON.parse(localStorage.getItem("alertify_local_users")) || {};
+      if (localUsers[email] && localUsers[email] === password) {
+        showToast("Login Success", `Welcome back, ${email}!`, "success");
+        loginForm.reset();
+        
+        const mockUser = { uid: email.replace(/[^a-zA-Z0-9]/g, "_"), email: email, type: 'local' };
+        localStorage.setItem("alertify_active_user", JSON.stringify(mockUser));
+        handleUserAuthenticated(mockUser);
+      } else {
+        showToast("Login Failed", "Invalid local email or password.", "error");
+      }
+    }
+  });
+
+  // 4. Logout handler
+  logoutBtn.addEventListener("click", () => {
+    if (!isFirebasePlaceholder && auth) {
+      signOut(auth)
+        .then(() => {
+          showToast("Logged Out", "You have been logged out.", "info");
+        })
+        .catch((error) => {
+          console.error("Firebase Signout Error:", error);
+        });
+    } else {
+      localStorage.removeItem("alertify_active_user");
+      handleUserLoggedOut();
+      showToast("Logged Out", "You have been logged out.", "info");
+    }
+  });
+
+  // 5. Check active session
+  if (!isFirebasePlaceholder && auth) {
+    onAuthStateChanged(auth, (user) => {
+      if (user) {
+        const u = { uid: user.uid, email: user.email, type: 'firebase' };
+        handleUserAuthenticated(u);
+      } else {
+        handleUserLoggedOut();
+      }
+    });
+  } else {
+    const savedUser = localStorage.getItem("alertify_active_user");
+    if (savedUser) {
+      handleUserAuthenticated(JSON.parse(savedUser));
+    } else {
+      handleUserLoggedOut();
+    }
+  }
+
+  function handleUserAuthenticated(user) {
+    state.currentUser = user;
+    userProfileEmail.textContent = user.email;
+    authOverlay.classList.add("hidden");
+    appContainer.classList.remove("hidden");
+    
+    initStorageEngine();
+    
+    setTimeout(() => {
+      refreshMapsLayout();
+    }, 200);
+  }
+
+  function handleUserLoggedOut() {
+    state.currentUser = null;
+    state.contacts = [];
+    state.history = [];
+    
+    if (state.firebaseContactsRef) { off(state.firebaseContactsRef); state.firebaseContactsRef = null; }
+    if (state.firebaseHistoryRef) { off(state.firebaseHistoryRef); state.firebaseHistoryRef = null; }
+    if (state.firebaseTemplateRef) { off(state.firebaseTemplateRef); state.firebaseTemplateRef = null; }
+    if (state.firebaseSirenRef) { off(state.firebaseSirenRef); state.firebaseSirenRef = null; }
+
+    userProfileEmail.textContent = "";
+    appContainer.classList.add("hidden");
+    authOverlay.classList.remove("hidden");
+  }
+}
+
 // --- Contact Storage Triggers ---
 function saveContactToStorage(contact) {
-  if (!isFirebasePlaceholder && db) {
-    const contactsRef = ref(db, `devices/${state.deviceId}/contacts`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const contactsRef = ref(db, `users/${state.currentUser.uid}/contacts`);
     const newContactRef = push(contactsRef);
     set(newContactRef, contact)
       .then(() => console.log("Contact pushed to Firebase."))
       .catch(err => console.error("Firebase write error:", err));
-  } else {
-    const localContacts = JSON.parse(localStorage.getItem("alertify_contacts")) || [];
+  } else if (state.currentUser) {
+    const localKey = `alertify_contacts_${state.currentUser.email}`;
+    const localContacts = JSON.parse(localStorage.getItem(localKey)) || [];
     contact.id = "local_" + Date.now();
     localContacts.push(contact);
-    localStorage.setItem("alertify_contacts", JSON.stringify(localContacts));
+    localStorage.setItem(localKey, JSON.stringify(localContacts));
     loadLocalContacts();
   }
 }
 
 function updateContactInStorage(contactId, updatedContact) {
-  if (!isFirebasePlaceholder && db) {
-    const contactRef = ref(db, `devices/${state.deviceId}/contacts/${contactId}`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const contactRef = ref(db, `users/${state.currentUser.uid}/contacts/${contactId}`);
     set(contactRef, updatedContact)
       .then(() => console.log("Contact updated in Firebase."))
       .catch(err => console.error("Firebase update error:", err));
-  } else {
-    const localContacts = JSON.parse(localStorage.getItem("alertify_contacts")) || [];
+  } else if (state.currentUser) {
+    const localKey = `alertify_contacts_${state.currentUser.email}`;
+    const localContacts = JSON.parse(localStorage.getItem(localKey)) || [];
     const index = localContacts.findIndex(c => c.id === contactId);
     if (index !== -1) {
       localContacts[index] = { ...localContacts[index], ...updatedContact };
-      localStorage.setItem("alertify_contacts", JSON.stringify(localContacts));
+      localStorage.setItem(localKey, JSON.stringify(localContacts));
       loadLocalContacts();
     }
   }
 }
 
 function deleteContactFromStorage(contactId) {
-  if (!isFirebasePlaceholder && db) {
-    const contactRef = ref(db, `devices/${state.deviceId}/contacts/${contactId}`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const contactRef = ref(db, `users/${state.currentUser.uid}/contacts/${contactId}`);
     remove(contactRef)
       .then(() => console.log("Contact deleted from Firebase."))
       .catch(err => console.error("Firebase delete error:", err));
-  } else {
-    let localContacts = JSON.parse(localStorage.getItem("alertify_contacts")) || [];
+  } else if (state.currentUser) {
+    const localKey = `alertify_contacts_${state.currentUser.email}`;
+    let localContacts = JSON.parse(localStorage.getItem(localKey)) || [];
     localContacts = localContacts.filter(c => c.id !== contactId);
-    localStorage.setItem("alertify_contacts", JSON.stringify(localContacts));
+    localStorage.setItem(localKey, JSON.stringify(localContacts));
     loadLocalContacts();
   }
 }
 
 function loadLocalContacts() {
-  state.contacts = JSON.parse(localStorage.getItem("alertify_contacts")) || [];
+  if (state.currentUser) {
+    const localKey = `alertify_contacts_${state.currentUser.email}`;
+    state.contacts = JSON.parse(localStorage.getItem(localKey)) || [];
+  } else {
+    state.contacts = [];
+  }
   renderContacts();
 }
 
 // --- History Storage Triggers ---
 function logAlertToStorage(alertObj) {
-  if (!isFirebasePlaceholder && db) {
-    const historyRef = ref(db, `devices/${state.deviceId}/history`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const historyRef = ref(db, `users/${state.currentUser.uid}/history`);
     const newHistoryRef = push(historyRef);
     set(newHistoryRef, alertObj)
       .then(() => console.log("SOS Alert log saved to Firebase."))
       .catch(err => console.error("Firebase history log error:", err));
-  } else {
-    const localHistory = JSON.parse(localStorage.getItem("alertify_history")) || [];
+  } else if (state.currentUser) {
+    const localKey = `alertify_history_${state.currentUser.email}`;
+    const localHistory = JSON.parse(localStorage.getItem(localKey)) || [];
     alertObj.id = "log_" + Date.now();
     localHistory.push(alertObj);
-    localStorage.setItem("alertify_history", JSON.stringify(localHistory));
+    localStorage.setItem(localKey, JSON.stringify(localHistory));
     loadLocalHistory();
   }
 }
 
 function clearHistoryFromStorage() {
-  if (!isFirebasePlaceholder && db) {
-    const historyRef = ref(db, `devices/${state.deviceId}/history`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const historyRef = ref(db, `users/${state.currentUser.uid}/history`);
     set(historyRef, null)
       .then(() => console.log("Firebase alert history cleared."))
       .catch(err => console.error("Firebase clear error:", err));
-  } else {
-    localStorage.removeItem("alertify_history");
+  } else if (state.currentUser) {
+    const localKey = `alertify_history_${state.currentUser.email}`;
+    localStorage.removeItem(localKey);
     loadLocalHistory();
   }
 }
 
 function loadLocalHistory() {
-  state.history = JSON.parse(localStorage.getItem("alertify_history")) || [];
-  state.history.sort((a, b) => b.timestamp - a.timestamp);
+  if (state.currentUser) {
+    const localKey = `alertify_history_${state.currentUser.email}`;
+    state.history = JSON.parse(localStorage.getItem(localKey)) || [];
+    state.history.sort((a, b) => b.timestamp - a.timestamp);
+  } else {
+    state.history = [];
+  }
   renderHistory();
 }
 
 function loadLocalTemplate() {
-  const val = localStorage.getItem("alertify_sms_template");
-  if (val) {
-    state.smsTemplate = val;
+  if (state.currentUser) {
+    const localKey = `alertify_sms_template_${state.currentUser.email}`;
+    state.smsTemplate = localStorage.getItem(localKey) || DEFAULT_SMS_TEMPLATE;
   } else {
     state.smsTemplate = DEFAULT_SMS_TEMPLATE;
   }
@@ -450,26 +657,28 @@ function loadLocalTemplate() {
 
 function saveTemplateToStorage(template) {
   state.smsTemplate = template;
-  if (!isFirebasePlaceholder && db) {
-    const templateRef = ref(db, `devices/${state.deviceId}/sms_template`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const templateRef = ref(db, `users/${state.currentUser.uid}/sms_template`);
     set(templateRef, template)
       .then(() => console.log("SMS template saved to Firebase."))
       .catch(err => console.error("Firebase template write error:", err));
-  } else {
-    localStorage.setItem("alertify_sms_template", template);
+  } else if (state.currentUser) {
+    const localKey = `alertify_sms_template_${state.currentUser.email}`;
+    localStorage.setItem(localKey, template);
     console.log("SMS template saved to LocalStorage.");
   }
   updateTemplateUI();
 }
 
 function resetTemplateInStorage() {
-  if (!isFirebasePlaceholder && db) {
-    const templateRef = ref(db, `devices/${state.deviceId}/sms_template`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const templateRef = ref(db, `users/${state.currentUser.uid}/sms_template`);
     set(templateRef, null)
       .then(() => console.log("SMS template reset in Firebase."))
       .catch(err => console.error("Firebase template reset error:", err));
-  } else {
-    localStorage.removeItem("alertify_sms_template");
+  } else if (state.currentUser) {
+    const localKey = `alertify_sms_template_${state.currentUser.email}`;
+    localStorage.removeItem(localKey);
     console.log("SMS template reset in LocalStorage.");
   }
   state.smsTemplate = DEFAULT_SMS_TEMPLATE;
@@ -484,6 +693,7 @@ function updateTemplateUI() {
   renderTemplatePreview();
 }
 
+// Function to render custom SMS templates
 function renderTemplatePreview() {
   const previewDiv = document.getElementById("templatePreview");
   if (!previewDiv) return;
@@ -512,19 +722,26 @@ function resolveTemplate(template, coords, address, mapLink, accuracy) {
 }
 
 function loadLocalSirenMode() {
-  state.sirenMode = localStorage.getItem("alertify_siren_mode") || "police";
+  if (state.currentUser) {
+    const localKey = `alertify_siren_mode_${state.currentUser.email}`;
+    state.sirenMode = localStorage.getItem(localKey) || "police";
+  } else {
+    state.sirenMode = "police";
+  }
   updateSirenUI();
 }
 
+// Save siren modes locally or dynamically
 function saveSirenModeToStorage(mode) {
   state.sirenMode = mode;
-  if (!isFirebasePlaceholder && db) {
-    const sirenRef = ref(db, `devices/${state.deviceId}/siren_mode`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const sirenRef = ref(db, `users/${state.currentUser.uid}/siren_mode`);
     set(sirenRef, mode)
       .then(() => console.log("Siren mode saved to Firebase."))
       .catch(err => console.error("Firebase siren mode write error:", err));
-  } else {
-    localStorage.setItem("alertify_siren_mode", mode);
+  } else if (state.currentUser) {
+    const localKey = `alertify_siren_mode_${state.currentUser.email}`;
+    localStorage.setItem(localKey, mode);
     console.log("Siren mode saved to LocalStorage.");
   }
   updateSirenUI();
@@ -597,12 +814,13 @@ function updateActiveSosCoordinates() {
     lastUpdated: Date.now()
   };
 
-  if (!isFirebasePlaceholder && db) {
-    const sosRef = ref(db, `devices/${state.deviceId}/active_sos`);
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const sosRef = ref(db, `users/${state.currentUser.uid}/active_sos`);
     set(sosRef, trackingObj)
       .catch(err => console.error("Error streaming active coordinates:", err));
-  } else {
-    localStorage.setItem("alertify_active_sos", JSON.stringify(trackingObj));
+  } else if (state.currentUser) {
+    const localKey = `alertify_active_sos_${state.currentUser.email}`;
+    localStorage.setItem(localKey, JSON.stringify(trackingObj));
   }
 }
 
@@ -1249,11 +1467,13 @@ function stopSosEmergency() {
   state.isAlarmActive = false;
   
   // Clear active tracking node
-  if (!isFirebasePlaceholder && db) {
-    const sosRef = ref(db, `devices/${state.deviceId}/active_sos`);
-    set(sosRef, null);
-  } else {
-    localStorage.removeItem("alertify_active_sos");
+  if (state.currentUser && state.currentUser.type !== 'local' && !isFirebasePlaceholder && db) {
+    const sosRef = ref(db, `users/${state.currentUser.uid}/active_sos`);
+    set(sosRef, null)
+      .catch(err => console.error("Error clearing active SOS status:", err));
+  } else if (state.currentUser) {
+    const localKey = `alertify_active_sos_${state.currentUser.email}`;
+    localStorage.removeItem(localKey);
   }
   
   // Reset header status

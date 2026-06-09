@@ -26,8 +26,63 @@
 </head>
 <body>
 
-  <!-- App Shell Layout -->
-  <div class="app-container">
+  <!-- AUTHENTICATION OVERLAY SCREEN -->
+  <div id="authOverlay" class="auth-overlay">
+    <div class="auth-container glass-card">
+      <div class="auth-header">
+        <img src="assets/logo.png" alt="Alertify Logo" class="auth-logo-img">
+        <h1 class="auth-title">Alertify</h1>
+        <p class="auth-subtitle">Emergency SOS Response Hub</p>
+      </div>
+
+      <!-- Tab Selection -->
+      <div class="auth-tabs">
+        <button id="loginTabBtn" class="auth-tab-btn active">Log In</button>
+        <button id="signupTabBtn" class="auth-tab-btn">Sign Up</button>
+      </div>
+
+      <!-- Login Form -->
+      <form id="loginForm" class="auth-form styled-form">
+        <div class="form-group">
+          <label for="loginEmail">Email Address</label>
+          <input type="email" id="loginEmail" required placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" required placeholder="Enter password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-right-to-bracket"></i> Sign In
+        </button>
+      </form>
+
+      <!-- Signup Form (hidden by default) -->
+      <form id="signupForm" class="auth-form styled-form hidden">
+        <div class="form-group">
+          <label for="signupEmail">Email Address</label>
+          <input type="email" id="signupEmail" required placeholder="name@example.com">
+        </div>
+        <div class="form-group">
+          <label for="signupPassword">Password</label>
+          <input type="password" id="signupPassword" required placeholder="Min 6 characters">
+        </div>
+        <div class="form-group">
+          <label for="signupConfirmPassword">Confirm Password</label>
+          <input type="password" id="signupConfirmPassword" required placeholder="Repeat password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">
+          <i class="fa-solid fa-user-plus"></i> Create Account
+        </button>
+      </form>
+      
+      <div class="auth-footer text-center">
+        <span class="text-muted" id="authModeWarning">Initializing system...</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- App Shell Layout (Hidden until authenticated) -->
+  <div class="app-container hidden">
     
     <!-- Top Header Bar -->
     <header class="app-header">
@@ -35,9 +90,18 @@
         <img src="assets/logo.png" alt="Alertify Logo" class="logo-img">
         <span class="logo-text">Alertify</span>
       </div>
-      <div class="system-status" id="systemStatus">
-        <span class="status-dot green"></span>
-        <span class="status-text">System Active</span>
+      <div class="header-right">
+        <div class="user-profile-badge" id="userProfileBadge">
+          <i class="fa-solid fa-user-tag"></i>
+          <span id="userProfileEmail">guest@alertify.local</span>
+        </div>
+        <button id="logoutBtn" class="btn btn-secondary btn-sm" title="Log Out">
+          <i class="fa-solid fa-right-from-bracket"></i> Log Out
+        </button>
+        <div class="system-status" id="systemStatus">
+          <span class="status-dot green"></span>
+          <span class="status-text">System Active</span>
+        </div>
       </div>
     </header>
 

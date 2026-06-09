@@ -19,6 +19,13 @@ import {
   get,
   off
 } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-database.js";
+import {
+  getAuth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
+} from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
 
 // Firebase Configuration Object - PASTE YOUR CONFIG HERE
 const firebaseConfig = {
@@ -39,11 +46,13 @@ const isFirebasePlaceholder =
 
 let db = null;
 let app = null;
+let auth = null;
 
 if (!isFirebasePlaceholder) {
   try {
     app = initializeApp(firebaseConfig);
     db = getDatabase(app);
+    auth = getAuth(app);
     console.log("🔥 Firebase initialized successfully. Sync mode: cloud database.");
   } catch (error) {
     console.error("❌ Firebase initialization failed:", error);
@@ -63,7 +72,12 @@ export {
   remove, 
   child, 
   get,
-  off 
+  off,
+  auth,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  onAuthStateChanged
 };
 
 // Twilio Cloud API Configuration - Load dynamic keys from localStorage or fallback to defaults
