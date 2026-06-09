@@ -430,7 +430,11 @@ function initAuthSystem() {
         })
         .catch((error) => {
           console.error("Firebase Auth Error:", error);
-          showToast("Registration Failed", error.message, "error");
+          let userMsg = error.message;
+          if (error.code === 'auth/operation-not-allowed') {
+            userMsg = "Email/Password sign-in provider is disabled in your Firebase console. Please go to the Firebase Console -> Authentication -> Sign-in method, and enable Email/Password.";
+          }
+          showToast("Registration Failed", userMsg, "error");
         });
     } else {
       const localUsers = JSON.parse(localStorage.getItem("alertify_local_users")) || {};
