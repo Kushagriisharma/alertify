@@ -3,8 +3,8 @@
  * Enables complete offline access in no-network environments.
  */
 
-const CACHE_NAME = 'alertify-cache-v21';
-const DYNAMIC_CACHE_NAME = 'alertify-dynamic-cache-v21';
+const CACHE_NAME = 'alertify-cache-v22';
+const DYNAMIC_CACHE_NAME = 'alertify-dynamic-cache-v22';
 
 const ASSETS_TO_CACHE = [
   './',

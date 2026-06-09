@@ -86,9 +86,9 @@ const savedToken = localStorage.getItem("alertify_twilio_token");
 const savedPhone = localStorage.getItem("alertify_twilio_phone");
 
 const twilioConfig = {
-  accountSid: savedSid || "AC30b84d8da5028310f97347b6babd4356",
-  authToken: savedToken || "13ffcd9b703d43840c8552dcf267dfc4",
-  twilioNumber: savedPhone || "+17692474423"
+  accountSid: savedSid || "YOUR_TWILIO_ACCOUNT_SID",
+  authToken: savedToken || "YOUR_TWILIO_AUTH_TOKEN",
+  twilioNumber: savedPhone || "YOUR_TWILIO_PHONE_NUMBER"
 };
 
 const isTwilioConfigured = 

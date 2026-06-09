@@ -37,41 +37,41 @@
 
       <!-- Tab Selection -->
       <div class="auth-tabs">
-        <button id="loginTabBtn" class="auth-tab-btn active">Log In</button>
-        <button id="signupTabBtn" class="auth-tab-btn">Sign Up</button>
+        <button id="loginTabBtn" class="auth-tab-btn active">Access Hub</button>
+        <button id="signupTabBtn" class="auth-tab-btn">Register Profile</button>
       </div>
 
       <!-- Login Form -->
       <form id="loginForm" class="auth-form styled-form">
         <div class="form-group">
-          <label for="loginEmail">Email Address</label>
-          <input type="email" id="loginEmail" required placeholder="name@example.com">
+          <label for="loginEmail">Profile Name / Email</label>
+          <input type="text" id="loginEmail" required placeholder="name@example.com">
         </div>
         <div class="form-group">
-          <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" required placeholder="Enter password">
+          <label for="loginPassword">Security Key / PIN</label>
+          <input type="text" id="loginPassword" required placeholder="Enter key" style="-webkit-text-security: disc; text-security: disc;">
         </div>
         <button type="submit" class="btn btn-primary btn-block">
-          <i class="fa-solid fa-right-to-bracket"></i> Sign In
+          <i class="fa-solid fa-right-to-bracket"></i> Enter Hub
         </button>
       </form>
 
       <!-- Signup Form (hidden by default) -->
       <form id="signupForm" class="auth-form styled-form hidden">
         <div class="form-group">
-          <label for="signupEmail">Email Address</label>
-          <input type="email" id="signupEmail" required placeholder="name@example.com">
+          <label for="signupEmail">Profile Name / Email</label>
+          <input type="text" id="signupEmail" required placeholder="name@example.com">
         </div>
         <div class="form-group">
-          <label for="signupPassword">Password</label>
-          <input type="password" id="signupPassword" required placeholder="Min 6 characters">
+          <label for="signupPassword">Security Key / PIN</label>
+          <input type="text" id="signupPassword" required placeholder="Min 6 characters" style="-webkit-text-security: disc; text-security: disc;">
         </div>
         <div class="form-group">
-          <label for="signupConfirmPassword">Confirm Password</label>
-          <input type="password" id="signupConfirmPassword" required placeholder="Repeat password">
+          <label for="signupConfirmPassword">Confirm Security Key / PIN</label>
+          <input type="text" id="signupConfirmPassword" required placeholder="Repeat key" style="-webkit-text-security: disc; text-security: disc;">
         </div>
         <button type="submit" class="btn btn-primary btn-block">
-          <i class="fa-solid fa-user-plus"></i> Create Account
+          <i class="fa-solid fa-user-plus"></i> Register Profile
         </button>
       </form>
       
@@ -428,22 +428,22 @@
             
             <form id="settingsForm" class="styled-form" style="margin-top: 0;">
               <h3 style="margin-top: 0; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem; color: var(--text-primary); font-size: 1.1rem; display: flex; align-items: center; gap: 0.5rem;">
-                <i class="fa-solid fa-phone-volume text-red"></i> Twilio API Gateway
+                <i class="fa-solid fa-phone-volume text-red"></i> Service API Gateway
               </h3>
               
               <div class="form-group">
-                <label for="settingsAccountSid">Twilio Account SID</label>
-                <input type="text" id="settingsAccountSid" placeholder="e.g. ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+                <label for="settingsAccountSid">Service SID</label>
+                <input type="text" id="settingsAccountSid" placeholder="e.g. ACxxxxxxxx...">
               </div>
               
               <div class="form-group">
-                <label for="settingsAuthToken">Twilio Auth Token</label>
-                <input type="password" id="settingsAuthToken" placeholder="Paste your Twilio Auth Token">
+                <label for="settingsAuthToken">Service Auth Token / Key</label>
+                <input type="text" id="settingsAuthToken" placeholder="Enter Token..." style="-webkit-text-security: disc; text-security: disc;">
               </div>
               
               <div class="form-group">
-                <label for="settingsTwilioNumber">Twilio Phone Number</label>
-                <input type="tel" id="settingsTwilioNumber" placeholder="e.g. +17692474423">
+                <label for="settingsTwilioNumber">Service Sender Number</label>
+                <input type="tel" id="settingsTwilioNumber" placeholder="e.g. +1...">
               </div>
 
               <div style="display: flex; gap: 0.5rem; margin-top: 1rem;">
